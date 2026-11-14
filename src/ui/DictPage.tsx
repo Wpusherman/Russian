@@ -67,7 +67,7 @@ export function LemmaCard({ lemma }: { lemma: LemmaRow }): ReactNode {
   ].filter(Boolean);
   return (
     <div className="card">
-      <h3 className="ru">{lemma.accented}</h3>
+      <h3 className="ru">{lemma.accented}{lemma.hint && <span className="muted"> {lemma.hint}</span>}</h3>
       <div>{glossOf(lemma) || <span className="muted">（訳語なし）</span>}</div>
       {lemma.glossJa && lemma.glossEn.length > 0 && <div className="muted">{lemma.glossEn.slice(0, 4).join(', ')}</div>}
       <div className="muted small-text">{meta.join(' ・ ')}</div>

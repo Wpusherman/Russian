@@ -19,6 +19,8 @@ export type Lemma = {
   partnerIds?: string[];
   glossEn: string[];
   glossJa?: string;
+  /** User annotation from word lists (e.g. "+対"): display only, never part of an answer. */
+  hint?: string;
   forms: Record<FeatKey, Form>;
 };
 

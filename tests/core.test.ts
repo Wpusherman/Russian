@@ -4,6 +4,7 @@ import { normalize } from '../src/core/normalize';
 import { confusionCounts, DAY_MS, tagStats, wilsonLB } from '../src/core/stats';
 import { expandTagPattern, tagsForFeat, verbConjType, confusionLabelJa } from '../src/core/tags';
 import { TRANSLIT_TABLE, translit, translitLive } from '../src/core/translit';
+import { mergeGloss, parseWordlistText } from '../src/core/wordlist';
 import type { Attempt, Form, Lemma } from '../src/core/types';
 import { convertAccent, splitForms } from '../scripts/build-dict';
 
@@ -231,6 +232,39 @@ describe('tags', () => {
   });
   it('labels confusions in Japanese', () => {
     expect(confusionLabelJa('case.prep.sg', 'case.acc.sg')).toBe('対格と前置格を取り違え');
+  });
+});
+
+describe('wordlist gloss merge', () => {
+  it('mergeGloss appends new meanings, numbered from two on', () => {
+    expect(mergeGloss('', 'ランプ')).toBe('ランプ'); // first gloss stays unnumbered (AI format too)
+    expect(mergeGloss('ランプ', '電灯')).toBe('1. ランプ 2. 電灯');
+    expect(mergeGloss('1. ランプ 2. 電灯', '照明')).toBe('1. ランプ 2. 電灯 3. 照明');
+    expect(mergeGloss('1. ランプ 2. 電灯', '電灯')).toBe('1. ランプ 2. 電灯'); // same meaning: no duplicate
+    expect(mergeGloss('ランプ、電灯', '照明')).toBe('1. ランプ 2. 電灯 3. 照明'); // existing "、" format is renumbered
+    expect(mergeGloss('ランプ', '')).toBe('ランプ');
+    expect(mergeGloss('本、書物', 'ほん')).toBe('1. 本 2. 書物 3. ほん'); // exact-match dedupe only
+  });
+  it('parseWordlistText appends the gloss of duplicate words instead of dropping them', () => {
+    expect(parseWordlistText('лампа\tランプ\nлампа\t電灯\nлампа')).toEqual([{ word: 'лампа', glossJa: '1. ランプ 2. 電灯' }]);
+    expect(parseWordlistText('книга\tほん\nкнига,本\nчитать')).toEqual([
+      { word: 'книга', glossJa: '1. ほん 2. 本' },
+      { word: 'читать' },
+    ]);
+    expect(parseWordlistText('слово\n\nСЛОВО\t意味')).toEqual([{ word: 'слово', glossJa: '意味' }]);
+  });
+  it('parseWordlistText keeps phrases and extracts the +case annotation', () => {
+    expect(parseWordlistText('сесть на +対\t乗る')).toEqual([{ word: 'сесть на', hint: '+対', glossJa: '乗る' }]);
+    expect(parseWordlistText('просить +対,頼む')).toEqual([{ word: 'просить', hint: '+対', glossJa: '頼む' }]);
+    expect(parseWordlistText('только +複')).toEqual([{ word: 'только', hint: '+複' }]);
+    expect(parseWordlistText('нет +属')).toEqual([{ word: 'нет', hint: '+生' }]); // 属 is normalised to 生
+    expect(parseWordlistText('пользоваться +具')).toEqual([{ word: 'пользоваться', hint: '+造' }]); // 具 -> 造
+    expect(parseWordlistText('нет +生 +属')).toEqual([{ word: 'нет', hint: '+生' }]); // same case after normalisation
+    expect(parseWordlistText('играть в +対 +前\t…について遊ぶ')).toEqual([
+      { word: 'играть в', hint: '+対+前', glossJa: '…について遊ぶ' },
+    ]);
+    expect(parseWordlistText('играть')).toEqual([{ word: 'играть' }]);
+    expect(parseWordlistText('+対\tonly')).toEqual([]); // an annotation alone is not a word
   });
 });
 

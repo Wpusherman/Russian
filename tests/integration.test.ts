@@ -12,7 +12,7 @@ import { exportAll, importAll, parseBackup } from '../src/db/backup';
 import { db, RusloDB, setDb } from '../src/db/db';
 import { toRow } from '../src/db/dict';
 import { loadSettings, setSetting } from '../src/db/settings';
-import { activeWeights, buildSession, loadContext, newLemmaQueue, recordAttempt } from '../src/db/study';
+import { activeWeights, buildQuestion, buildSession, loadContext, newLemmaQueue, recordAttempt } from '../src/db/study';
 import { createWordlist } from '../src/db/wordlists';
 
 const f = (primary: string): Form => ({ primary, variants: [] });
@@ -147,6 +147,24 @@ describe('word lists (M4)', () => {
     expect((await newLemmaQueue(ctx.cards)).slice(0, 4)).toEqual(['n-лампа', 'n-книга', 'u-привет', 'n-крыша']);
     const lamp = qs.find((q) => q.itemId === 'T1:n-лампа');
     expect(lamp?.type === 'T1' && lamp.options[lamp.correct]).toBe('ランプ');
+
+    // A different meaning from another list is appended (numbered), not overwritten.
+    await createWordlist('教科書2', 'лампа\t電灯');
+    expect((await db.lemmas.get('n-лампа'))?.glossJa).toBe('1. ランプ 2. 電灯');
+    expect((await loadSettings()).glossJa['n-лампа']).toBe('1. ランプ 2. 電灯');
+    await createWordlist('教科書3', 'лампа\tランプ');
+    expect((await db.lemmas.get('n-лампа'))?.glossJa).toBe('1. ランプ 2. 電灯'); // same meaning: no duplicate
+
+    // Phrases / idioms with a case hint become whole-phrase user words (T1/T2 only); the hint
+    // is display-only (never typed) and is kept for dictionary words too.
+    await createWordlist('フレーズ', 'сесть на +対\t乗る\nдержать +対');
+    const phrase = await db.lemmas.get('u-сесть_на');
+    expect(phrase).toMatchObject({ pos: 'other', bare: 'сесть на', hint: '+対', glossJa: '乗る', forms: {}, user: true });
+    expect((await db.lemmas.get('v-держать'))?.hint).toBe('+対');
+    expect((await loadSettings()).hints).toEqual({ 'v-держать': '+対', 'u-сесть_на': '+対' });
+    const phq = await buildQuestion({ itemId: 'T1:u-сесть_на', type: 'T1', lemmaId: 'u-сесть_на', slot: 'new' });
+    expect(phq?.type === 'T1' && phq.hint).toBe('+対');
+    expect(phq?.type === 'T1' && phq.options[phq.correct]).toBe('乗る');
   });
 });
 

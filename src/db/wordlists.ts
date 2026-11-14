@@ -1,20 +1,39 @@
-import { parseWordlistText } from '../core/wordlist';
+import { mergeGloss, parseWordlistText } from '../core/wordlist';
 import { db, type LemmaRow, type WordlistEntry, type WordlistRow } from './db';
 import { findLemmas, lemmaKey } from './dict';
 import { loadSettings, setSetting } from './settings';
 
-/** Store a Japanese gloss on the lemma and in settings (so it survives dictionary rebuilds). */
+/**
+ * Store Japanese glosses on the lemmas and in settings (so they survive dictionary rebuilds).
+ * A meaning that is already there stays first; new meanings are appended, numbered from two on.
+ */
 export async function saveGlosses(glosses: Record<string, string>): Promise<number> {
   const ids = Object.keys(glosses);
   if (ids.length === 0) return 0;
-  const rows = await db.lemmas.bulkGet(ids);
-  const found = rows.filter((r): r is LemmaRow => !!r);
-  await db.lemmas.bulkPut(found.map((r) => ({ ...r, glossJa: glosses[r.id]! })));
   const s = await loadSettings();
   const merged = { ...s.glossJa };
-  for (const r of found) merged[r.id] = glosses[r.id]!;
+  const rows = await db.lemmas.bulkGet(ids);
+  const found = rows.filter((r): r is LemmaRow => !!r);
+  await db.lemmas.bulkPut(
+    found.map((r) => {
+      const next = mergeGloss(r.glossJa ?? merged[r.id] ?? '', glosses[r.id]!);
+      merged[r.id] = next;
+      return { ...r, glossJa: next };
+    }),
+  );
   await setSetting('glossJa', merged);
   return found.length;
+}
+
+/** Grammar annotations (e.g. "+対") shown next to the word; kept in settings like glossJa. */
+export async function saveHints(hints: Record<string, string>): Promise<number> {
+  const ids = Object.keys(hints);
+  if (ids.length === 0) return 0;
+  const s = await loadSettings();
+  await setSetting('hints', { ...s.hints, ...hints });
+  const rows = await db.lemmas.bulkGet(ids);
+  await db.lemmas.bulkPut(rows.filter((r): r is LemmaRow => !!r).map((r) => ({ ...r, hint: hints[r.id]! })));
+  return ids.length;
 }
 
 export type ImportSummary = { matched: number; created: number; total: number };
@@ -24,6 +43,7 @@ export async function createWordlist(name: string, text: string): Promise<Import
   const lines = parseWordlistText(text);
   const entries: WordlistEntry[] = [];
   const glosses: Record<string, string> = {};
+  const hints: Record<string, string> = {};
   const newUser: LemmaRow[] = [];
   let matched = 0;
   for (const line of lines) {
@@ -31,15 +51,18 @@ export async function createWordlist(name: string, text: string): Promise<Import
     let lemma = hits[0]; // lowest rank
     if (lemma && !lemma.user) matched++;
     if (!lemma) {
+      // Words missing from the dictionary (incl. whole phrases / idioms) become user lemmas: T1/T2 only.
       const bare = line.word.replace(/\u0301/g, '').trim();
       lemma = {
         id: `u-${bare.replace(/[:\s]/g, '_')}`, bare, accented: line.word.trim(), pos: 'other', rank: null, level: null,
         glossEn: [], forms: {}, key: lemmaKey(bare), user: true,
       };
       if (line.glossJa) lemma.glossJa = line.glossJa;
+      if (line.hint) lemma.hint = line.hint;
       newUser.push(lemma);
     }
-    if (line.glossJa) glosses[lemma.id] = line.glossJa;
+    if (line.glossJa) glosses[lemma.id] = glosses[lemma.id] ? mergeGloss(glosses[lemma.id], line.glossJa) : line.glossJa;
+    if (line.hint) hints[lemma.id] = line.hint;
     if (!entries.some((e) => e.lemmaId === lemma.id)) {
       entries.push(line.glossJa ? { lemmaId: lemma.id, glossJa: line.glossJa } : { lemmaId: lemma.id });
     }
@@ -52,6 +75,7 @@ export async function createWordlist(name: string, text: string): Promise<Import
     await setSetting('userLemmas', [...byId.values()]);
   }
   await saveGlosses(glosses);
+  await saveHints(hints);
   const all = await db.wordlists.toArray();
   const priority = all.reduce((m, l) => Math.max(m, l.priority), 0) + 1;
   await db.wordlists.add({ name: name.trim() || '無題のリスト', priority, active: true, entries });

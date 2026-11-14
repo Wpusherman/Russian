@@ -169,10 +169,10 @@ export async function buildQuestion(p: PlannedItem, rng: () => number = Math.ran
     case 'T1': {
       if (!gloss) return null;
       const options = shuffle([gloss, ...(await distractors(lemma, rng))], rng);
-      return { ...base, type: 'T1', tags: vocabTags(lemma), lemma, options, correct: options.indexOf(gloss) };
+      return { ...base, type: 'T1', tags: vocabTags(lemma), lemma, hint: lemma.hint, options, correct: options.indexOf(gloss) };
     }
     case 'T2':
-      return { ...base, type: 'T2', tags: vocabTags(lemma), lemma, gloss, expected: { primary: lemma.accented, variants: [] } };
+      return { ...base, type: 'T2', tags: vocabTags(lemma), lemma, gloss, hint: lemma.hint, expected: { primary: lemma.accented, variants: [] } };
     case 'T3': {
       const expected = feat ? expectedForm(lemma, feat) : null;
       if (!feat || !expected) return null;

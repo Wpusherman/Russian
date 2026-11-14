@@ -5,8 +5,8 @@ import type { AnswerClass, Confusion, FeatKey, Form, Lemma } from './types';
 
 type Base = { itemId: string; lemmaId: string; tags: string[] };
 
-export type QuestionT1 = Base & { type: 'T1'; lemma: Lemma; options: string[]; correct: number };
-export type QuestionT2 = Base & { type: 'T2'; lemma: Lemma; gloss: string; expected: Form };
+export type QuestionT1 = Base & { type: 'T1'; lemma: Lemma; options: string[]; correct: number; hint?: string };
+export type QuestionT2 = Base & { type: 'T2'; lemma: Lemma; gloss: string; expected: Form; hint?: string };
 export type QuestionT3 = Base & { type: 'T3'; lemma: Lemma; feat: FeatKey; gloss: string; expected: Form };
 export type QuestionT4 = Base & {
   type: 'T4'; lemma: Lemma; feat: FeatKey; sentence: string; translation: string; explain: string; expected: Form;

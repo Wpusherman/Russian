@@ -15,15 +15,22 @@ export function toRow(l: Lemma, glossJa?: string): LemmaRow {
   return row;
 }
 
-/** Re-apply user data that lives outside the dictionary file (glosses, user words). */
+/** Re-apply user data that lives outside the dictionary file (glosses, case hints, user words). */
 export async function reapplyUserData(): Promise<void> {
   const s = await loadSettings();
   if (s.userLemmas.length > 0) await db.lemmas.bulkPut(s.userLemmas);
   const ids = Object.keys(s.glossJa);
-  if (ids.length === 0) return;
-  const rows = await db.lemmas.bulkGet(ids);
-  const upd = rows.filter((r): r is LemmaRow => !!r).map((r) => ({ ...r, glossJa: s.glossJa[r.id] }));
-  await db.lemmas.bulkPut(upd);
+  if (ids.length > 0) {
+    const rows = await db.lemmas.bulkGet(ids);
+    const upd = rows.filter((r): r is LemmaRow => !!r).map((r) => ({ ...r, glossJa: s.glossJa[r.id] }));
+    await db.lemmas.bulkPut(upd);
+  }
+  const hintIds = Object.keys(s.hints);
+  if (hintIds.length > 0) {
+    const rows = await db.lemmas.bulkGet(hintIds);
+    const upd = rows.filter((r): r is LemmaRow => !!r).map((r) => ({ ...r, hint: s.hints[r.id] }));
+    await db.lemmas.bulkPut(upd);
+  }
 }
 
 async function fetchWithProgress(url: string, onRatio: (r: number) => void): Promise<string> {

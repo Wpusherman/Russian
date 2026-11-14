@@ -20,6 +20,8 @@ export type Settings = {
   lastAnalyzedAttemptId: number;
   /** Japanese glosses (AI / word lists). Kept here so they survive dictionary rebuilds and export/import. */
   glossJa: Record<string, string>;
+  /** Grammar annotations (e.g. "+対") per lemma id, kept like glossJa. */
+  hints: Record<string, string>;
   /** Word-list words that are not in the dictionary. */
   userLemmas: LemmaRow[];
   seedVersion: number;
@@ -48,6 +50,7 @@ export const DEFAULTS: Settings = {
   lastAnalysisAt: 0,
   lastAnalyzedAttemptId: 0,
   glossJa: {},
+  hints: {},
   userLemmas: [],
   seedVersion: 0,
 };

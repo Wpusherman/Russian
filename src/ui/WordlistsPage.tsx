@@ -72,7 +72,8 @@ export function WordlistsPage(): ReactNode {
         <label>リスト名（例：書籍名）<input className="search" value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label>
           単語（1行に1語。<code>見出し語</code> または <code>見出し語[TAB か ,]日本語訳</code>）
-          <textarea rows={10} value={text} onChange={(e) => setText(e.target.value)} placeholder={'книга\tほん\nчитать,読む\nспасибо'} />
+          <textarea rows={10} value={text} onChange={(e) => setText(e.target.value)}
+          placeholder={'книга\tほん\nчитать,読む\nсесть на +対\t乗る\nспасибо'} />
         </label>
         <div className="row">
           <button className="primary" disabled={busy || !text.trim()} onClick={() => void add()}>{busy ? '登録中…' : '登録'}</button>
@@ -82,7 +83,10 @@ export function WordlistsPage(): ReactNode {
             </span>
           )}
         </div>
-        <p className="muted">辞書にない語は、日本語訳を付けた場合のみ出題されます（意味認識と綴り想起のみ）。</p>
+        <p className="muted">
+          辞書にない語は、日本語訳を付けた場合のみ出題されます（意味認識と綴り想起のみ）。同じ語に別の訳を登録すると上書きされず、「1. 訳1 2. 訳2」と追記されます。
+          フレーズ（例：<code>сесть на +対</code>）も登録でき、<code>+主/生/属/与/対/造/具/前/複</code> は文法のヒントとして表示されます（属は生、具は造として扱われ、入力対象にはならない）。
+        </p>
       </section>
     </div>
   );

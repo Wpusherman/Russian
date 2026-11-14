@@ -38,9 +38,9 @@ function Prompt({ q, onSpeak, canSpeak }: { q: Question; onSpeak: () => void; ca
   const speakBtn = canSpeak && <button className="ghost small" tabIndex={-1} onClick={onSpeak} title="P">🔊 <kbd>P</kbd></button>;
   switch (q.type) {
     case 'T1':
-      return <div className="prompt"><div className="ru big-word">{q.lemma.accented}</div>{speakBtn}<p className="muted">意味を選んでください（1〜4）</p></div>;
+      return <div className="prompt"><div className="ru big-word">{q.lemma.accented}{q.hint && <span className="muted"> {q.hint}</span>}</div>{speakBtn}<p className="muted">意味を選んでください（1〜4）</p></div>;
     case 'T2':
-      return <div className="prompt"><div className="big-word">{q.gloss}</div>{canSpeak && <button className="ghost small" tabIndex={-1} onClick={onSpeak}>🔊 <kbd>Ctrl+P</kbd></button>}<p className="muted">ロシア語で書いてください</p></div>;
+      return <div className="prompt"><div className="big-word">{q.gloss}</div>{q.hint && <div className="muted">{q.hint}</div>}{canSpeak && <button className="ghost small" tabIndex={-1} onClick={onSpeak}>🔊 <kbd>Ctrl+P</kbd></button>}<p className="muted">ロシア語で書いてください</p></div>;
     case 'T3':
       return (
         <div className="prompt">
@@ -193,6 +193,7 @@ function ResultView(props: {
       </div>
       <div className="answer">
         正解：<span className="ru big">{g.expected}</span>
+        {'hint' in q && q.hint && <span className="muted">（{q.hint}）</span>}
         {props.canSpeak && <button className="ghost small" tabIndex={-1} onClick={props.onSpeak}>🔊 <kbd>P</kbd></button>}
       </div>
       {!ok && q.type !== 'T1' && <div>あなたの解答：<span className="ru">{g.given || '（空欄）'}</span></div>}
