@@ -1,0 +1,277 @@
+import { computeUnlocked, currentUnit, unlockedTags, UNITS, type Unit } from '../content/units';
+import { isCorrectClass } from '../core/classify';
+import { fillBlank, glossOf, stressInfo, type Graded, type Question } from '../core/grade';
+import { newFsrs, retrievability, review, STATE_REVIEW } from '../core/scheduler';
+import {
+  buildGenerator, itemIdT1, itemIdT2, parseItemId, planSession, stressable, vocabTags,
+  type ExtraItem, type PlannedItem, type SessionCard,
+} from '../core/session';
+import { startOfDay, tagStats, type TagStat } from '../core/stats';
+import { expectedForm, prepTag, tagsForFeat } from '../core/tags';
+import type { Attempt, RatingNum } from '../core/types';
+import { normalize } from '../core/normalize';
+import { db, type CardRow, type ItemRow, type LemmaRow, type T4Payload, type UnitStateRow } from './db';
+import { loadSettings, type Settings } from './settings';
+
+export type StudyContext = {
+  now: number;
+  settings: Settings;
+  attempts: Attempt[];
+  cards: CardRow[];
+  stats: Map<string, TagStat>;
+  unitStates: Map<string, UnitStateRow>;
+  unlocked: string[];
+  current: Unit;
+  weights: Record<string, number>;
+  dueCount: number;
+  newIntroducedToday: number;
+  newRemainingToday: number;
+};
+
+/** Tag weights of the latest analysis, unless expired (14 days). A newer analysis replaces them. */
+export async function activeWeights(now: number): Promise<Record<string, number>> {
+  const last = await db.plans.orderBy('id').last();
+  if (!last || last.expiresAt <= now) return {};
+  return Object.fromEntries(last.weights.map((w) => [w.tag, w.w]));
+}
+
+export async function loadContext(now = Date.now()): Promise<StudyContext> {
+  const [settings, attempts, cards, unitRows, weights] = await Promise.all([
+    loadSettings(), db.attempts.toArray(), db.cards.toArray(), db.unitState.toArray(), activeWeights(now),
+  ]);
+  const stats = tagStats(attempts, now);
+  const unitStates = new Map(unitRows.map((r) => [r.unitId, r]));
+  const persisted = new Set(unitRows.filter((r) => r.unlocked).map((r) => r.unitId));
+  const unlocked = computeUnlocked(stats, persisted);
+  // Persist automatic unlocks so they are never lost when the 30-day window moves on.
+  const fresh = unlocked.filter((id) => !persisted.has(id));
+  if (fresh.length > 0) {
+    await db.unitState.bulkPut(fresh.map((id) => ({ ...(unitStates.get(id) ?? { unitId: id }), unlocked: true })));
+    for (const id of fresh) unitStates.set(id, { ...(unitStates.get(id) ?? { unitId: id }), unlocked: true });
+  }
+  const today = startOfDay(now);
+  const newIntroducedToday = cards.filter((c) => c.type === 'T1' && c.createdAt >= today).length;
+  return {
+    now, settings, attempts, cards, stats, unitStates, unlocked, current: currentUnit(unlocked), weights,
+    dueCount: cards.filter((c) => c.due <= now).length,
+    newIntroducedToday,
+    newRemainingToday: Math.max(0, settings.dailyNewLimit - newIntroducedToday),
+  };
+}
+
+const LEVEL_ORDER = ['A1', 'A2', 'B1'];
+
+/** Unlearned lemma ids in priority order: active word lists first, then A1 -> A2 -> B1 by rank. */
+export async function newLemmaQueue(cards: CardRow[], limit = 200): Promise<string[]> {
+  const learned = new Set(cards.filter((c) => c.type === 'T1').map((c) => c.lemmaId));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (id: string) => {
+    if (!learned.has(id) && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  };
+  const lists = (await db.wordlists.toArray()).filter((l) => l.active).sort((a, b) => a.priority - b.priority);
+  const listIds = lists.flatMap((l) => l.entries.map((e) => e.lemmaId));
+  const listRows = await db.lemmas.bulkGet(listIds);
+  // Words without any gloss cannot be asked as T1 (nothing to choose from), so they are skipped.
+  listRows.forEach((r) => { if (r && (r.glossJa || r.glossEn.length > 0)) push(r.id); });
+  if (out.length >= limit) return out.slice(0, limit);
+  for (const level of LEVEL_ORDER) {
+    const rows = await db.lemmas.where('level').equals(level).toArray();
+    rows.sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9) || a.id.localeCompare(b.id));
+    for (const r of rows) if (!r.user && (r.glossEn.length > 0 || r.glossJa)) push(r.id);
+    if (out.length >= limit) break;
+  }
+  return out.slice(0, limit);
+}
+
+/** Up to 100 upcoming new words that still lack a Japanese gloss (spec 12.3). */
+export async function glossCandidates(cards: CardRow[]): Promise<LemmaRow[]> {
+  const ids = await newLemmaQueue(cards, 100);
+  const rows = await db.lemmas.bulkGet(ids);
+  return rows.filter((r): r is LemmaRow => !!r && !r.glossJa && r.glossEn.length > 0);
+}
+
+const NUMERALS = new Set([
+  'два', 'две', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять', 'десять', 'много', 'мало', 'несколько', 'сколько',
+]);
+
+/** Tags of a T4 item: feat tags + preposition / numeral right before the blank. */
+export function t4Tags(lemma: LemmaRow, feat: string, sentence: string): string[] {
+  const tags = new Set(tagsForFeat(lemma, feat));
+  const before = sentence.split('___')[0] ?? '';
+  const prev = before.trim().split(/\s+/).pop() ?? '';
+  const p = prepTag(prev);
+  if (p) tags.add(p);
+  if (NUMERALS.has(normalize(prev))) tags.add('num.gov');
+  return [...tags];
+}
+
+export function t6IdFor(t4ItemId: string): string {
+  return `T6:${t4ItemId.replace(/^T4:/, '')}`;
+}
+
+function shuffle<T>(a: T[], rng: () => number): T[] {
+  const out = [...a];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
+async function distractors(lemma: LemmaRow, rng: () => number): Promise<string[]> {
+  const own = glossOf(lemma);
+  const pick = async (lo: number, hi: number) => {
+    const rows = await db.lemmas.where('[pos+rank]').between([lemma.pos, lo], [lemma.pos, hi], true, true).toArray();
+    const glosses = new Set<string>();
+    for (const r of shuffle(rows, rng)) {
+      const g = glossOf(r);
+      if (r.id !== lemma.id && g && g !== own) glosses.add(g);
+      if (glosses.size >= 3) break;
+    }
+    return [...glosses];
+  };
+  const rank = lemma.rank ?? 150;
+  let out = await pick(Math.max(1, rank - 40), rank + 40);
+  if (out.length < 3) out = await pick(1, Math.max(400, rank + 400));
+  return out.slice(0, 3);
+}
+
+/** Turn a planned item into a displayable question. Returns null when its data no longer exists. */
+export async function buildQuestion(p: PlannedItem, rng: () => number = Math.random): Promise<Question | null> {
+  const { type, ref, feat } = parseItemId(p.itemId);
+  if (type === 'T4' || type === 'T6') {
+    const item = await db.items.get(type === 'T4' ? p.itemId : `T4:${ref}`);
+    if (!item) return null;
+    const lemma = await db.lemmas.get(item.payload.lemmaId);
+    if (!lemma) return null;
+    const pl = item.payload;
+    const expected = lemma.forms[pl.feat] ?? { primary: pl.answer, variants: [] };
+    if (type === 'T4') {
+      return {
+        type: 'T4', itemId: p.itemId, lemmaId: lemma.id, tags: item.tags, lemma, feat: pl.feat,
+        sentence: pl.sentence_ru, translation: pl.translation_ja, explain: pl.explain_ja, expected,
+      };
+    }
+    return {
+      type: 'T6', itemId: p.itemId, lemmaId: lemma.id, tags: ['vocab'],
+      sentence: fillBlank(pl.sentence_ru, pl.answer), translation: pl.translation_ja,
+    };
+  }
+  const lemma = await db.lemmas.get(ref);
+  if (!lemma) return null;
+  const base = { itemId: p.itemId, lemmaId: lemma.id };
+  const gloss = glossOf(lemma);
+  switch (type) {
+    case 'T1': {
+      if (!gloss) return null;
+      const options = shuffle([gloss, ...(await distractors(lemma, rng))], rng);
+      return { ...base, type: 'T1', tags: vocabTags(lemma), lemma, options, correct: options.indexOf(gloss) };
+    }
+    case 'T2':
+      return { ...base, type: 'T2', tags: vocabTags(lemma), lemma, gloss, expected: { primary: lemma.accented, variants: [] } };
+    case 'T3': {
+      const expected = feat ? expectedForm(lemma, feat) : null;
+      if (!feat || !expected) return null;
+      return { ...base, type: 'T3', tags: tagsForFeat(lemma, feat), lemma, feat, gloss, expected };
+    }
+    case 'T5': {
+      if (!stressable(lemma)) return null;
+      return { ...base, type: 'T5', tags: ['phon.stress'], lemma, gloss, ...stressInfo(lemma.accented) };
+    }
+  }
+}
+
+/** Plan a session (spec section 10) and materialise its questions. */
+export async function buildSession(ctx: StudyContext, opts: { ttsAvailable: boolean; rng?: () => number }): Promise<Question[]> {
+  const rng = opts.rng ?? Math.random;
+  const now = ctx.now;
+  const usable = ctx.cards.filter((c) => opts.ttsAvailable || c.type !== 'T6');
+  const cards: SessionCard[] = usable.map((c) => ({
+    id: c.id, type: c.type, lemmaId: c.lemmaId, tags: c.tags, due: c.due, retrievability: retrievability(c, now),
+  }));
+  const today = startOfDay(now);
+  const shownToday = new Set(ctx.attempts.filter((a) => a.ts >= today).map((a) => a.itemId));
+  const t1Correct = new Set(ctx.cards.filter((c) => c.type === 'T2').map((c) => c.lemmaId));
+  const reviewIds = ctx.cards.filter((c) => c.type === 'T1' && c.state === STATE_REVIEW).map((c) => c.lemmaId);
+  const preferred = new Set(reviewIds);
+  const [reviewLemmas, a1, items, newIds] = await Promise.all([
+    db.lemmas.bulkGet(reviewIds), db.lemmas.where('level').equals('A1').toArray(), db.items.toArray(), newLemmaQueue(ctx.cards),
+  ]);
+  const pool = new Map<string, LemmaRow>();
+  for (const l of [...reviewLemmas, ...a1]) if (l) pool.set(l.id, l);
+
+  const tagsUnlocked = unlockedTags(ctx.unlocked);
+  const unlockedSet = new Set(tagsUnlocked);
+  const hasCard = new Set(ctx.cards.map((c) => c.id));
+  // T4 items that were never asked are offered through the weak slot once their grammar tags are unlocked.
+  const extra: ExtraItem[] = items
+    .filter((it) => !hasCard.has(it.id))
+    .filter((it) => it.tags.filter((t) => !t.startsWith('spell.')).every((t) => unlockedSet.has(t)))
+    .map((it) => ({ item: { itemId: it.id, type: 'T4', lemmaId: it.payload.lemmaId, slot: 'weak' }, tags: it.tags }));
+
+  const plan = planSession({
+    now, sessionSize: ctx.settings.sessionSize, cards, shownToday, tagStats: ctx.stats,
+    unlockedTags: tagsUnlocked, currentUnitTags: ctx.current.tags, tagWeights: ctx.weights,
+    newLemmaIds: newIds, newRemainingToday: ctx.newRemainingToday,
+    generate: buildGenerator([...pool.values()], preferred, t1Correct, rng, extra, unlockedSet), rng,
+  });
+  const questions: Question[] = [];
+  for (const p of plan) {
+    const q = await buildQuestion(p, rng);
+    if (q) questions.push(q);
+  }
+  return questions;
+}
+
+export type RecordInput = { question: Question; graded: Graded; rating: RatingNum; latencyMs: number; hintCount: number; now?: number };
+
+/** Store the attempt and update (or create) the FSRS card. */
+export async function recordAttempt(input: RecordInput): Promise<Attempt> {
+  const now = input.now ?? Date.now();
+  const { question: q, graded } = input;
+  const attempt: Attempt = {
+    itemId: q.itemId, ts: now, type: q.type, given: graded.given, class: graded.class, rating: input.rating,
+    latencyMs: Math.round(input.latencyMs), hintCount: input.hintCount, tags: graded.tags,
+    prompt: graded.prompt, expected: graded.expected,
+  };
+  if (graded.confusion) attempt.confusion = graded.confusion;
+  await db.transaction('rw', db.attempts, db.cards, async () => {
+    attempt.id = await db.attempts.add(attempt);
+    const existing = await db.cards.get(q.itemId);
+    const base: CardRow = existing ?? { id: q.itemId, type: q.type, lemmaId: q.lemmaId, tags: q.tags, createdAt: now, ...newFsrs(now) };
+    await db.cards.put({ ...base, tags: q.tags, ...review(base, input.rating, now) });
+    if (!isCorrectClass(graded.class)) return;
+    // Gates: T2 opens after the first correct T1, T6 (dictation) after the first correct T4.
+    const follow = q.type === 'T1' ? { id: itemIdT2(q.lemmaId), type: 'T2' as const, tags: q.tags }
+      : q.type === 'T4' ? { id: t6IdFor(q.itemId), type: 'T6' as const, tags: ['vocab'] }
+      : null;
+    if (follow && !(await db.cards.get(follow.id))) {
+      await db.cards.put({ ...follow, lemmaId: q.lemmaId, createdAt: now, ...newFsrs(now) });
+    }
+  });
+  return attempt;
+}
+
+/** Register a validated fill-in item (T4). */
+export async function addT4Item(payload: T4Payload, lemma: LemmaRow, source: 'ai' | 'user', now = Date.now()): Promise<ItemRow> {
+  const all = await db.items.toArray();
+  const dup = all.find((i) => i.payload.sentence_ru === payload.sentence_ru && i.payload.lemmaId === payload.lemmaId);
+  if (dup) return dup;
+  const next = all.reduce((m, i) => Math.max(m, Number(i.id.slice(3)) || 0), 0) + 1;
+  const row: ItemRow = {
+    id: `T4:${next}`, type: 'T4', payload, tags: t4Tags(lemma, payload.feat, payload.sentence_ru), source, createdAt: now,
+  };
+  await db.items.add(row);
+  return row;
+}
+
+export async function setUnitState(unitId: string, patch: Partial<UnitStateRow>): Promise<void> {
+  const cur = (await db.unitState.get(unitId)) ?? { unitId, unlocked: unitId === UNITS[0]!.id };
+  await db.unitState.put({ ...cur, ...patch, unitId });
+}
+
+export { itemIdT1 };

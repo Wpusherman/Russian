@@ -1,0 +1,116 @@
+import { classify, damerauLevenshtein } from './classify';
+import { normalizeSentence, stripAccent } from './normalize';
+import { featLabelJa } from './tags';
+import type { AnswerClass, Confusion, FeatKey, Form, Lemma } from './types';
+
+type Base = { itemId: string; lemmaId: string; tags: string[] };
+
+export type QuestionT1 = Base & { type: 'T1'; lemma: Lemma; options: string[]; correct: number };
+export type QuestionT2 = Base & { type: 'T2'; lemma: Lemma; gloss: string; expected: Form };
+export type QuestionT3 = Base & { type: 'T3'; lemma: Lemma; feat: FeatKey; gloss: string; expected: Form };
+export type QuestionT4 = Base & {
+  type: 'T4'; lemma: Lemma; feat: FeatKey; sentence: string; translation: string; explain: string; expected: Form;
+};
+export type QuestionT5 = Base & { type: 'T5'; lemma: Lemma; gloss: string; word: string; stressed: number[] };
+export type QuestionT6 = Base & { type: 'T6'; sentence: string; translation: string };
+export type Question = QuestionT1 | QuestionT2 | QuestionT3 | QuestionT4 | QuestionT5 | QuestionT6;
+
+export type Answer = { kind: 'choice'; index: number } | { kind: 'text'; text: string } | { kind: 'stress'; index: number };
+
+export type Graded = {
+  class: AnswerClass;
+  confusion?: Confusion;
+  /** Question tags plus the spelling-rule tag when one was violated. */
+  tags: string[];
+  given: string;
+  /** Correct answer for display (with stress marks). */
+  expected: string;
+  /** Short prompt description stored with the attempt (used in AI samples). */
+  prompt: string;
+};
+
+/** Display gloss: glossJa if present, otherwise the first two English glosses. */
+export function glossOf(lemma: Pick<Lemma, 'glossJa' | 'glossEn'>): string {
+  if (lemma.glossJa) return lemma.glossJa;
+  return lemma.glossEn.slice(0, 2).join(', ');
+}
+
+/** Word without stress marks plus the indexes of its stressed characters (ё counts as stressed). */
+export function stressInfo(accented: string): { word: string; stressed: number[] } {
+  let word = '';
+  const stressed: number[] = [];
+  for (const ch of accented.normalize('NFC')) {
+    if (ch === '\u0301') {
+      if (word.length > 0) stressed.push(word.length - 1);
+    } else if (ch === '\u0300') {
+      continue;
+    } else {
+      if (ch === 'ё' || ch === 'Ё') stressed.push(word.length);
+      word += ch;
+    }
+  }
+  return { word, stressed: [...new Set(stressed)] };
+}
+
+export function fillBlank(sentence: string, answer: string): string {
+  return sentence.replace('___', stripAccent(answer));
+}
+
+/** First `count` letters of the answer (hint for T2 / T3). */
+export function hintText(expected: Form, count: number): string {
+  return stripAccent(expected.primary).slice(0, count);
+}
+
+function withTag(tags: string[], tag?: string): string[] {
+  return tag && !tags.includes(tag) ? [...tags, tag] : tags;
+}
+
+export function grade(q: Question, a: Answer, opts: { yoLenient: boolean }): Graded {
+  switch (q.type) {
+    case 'T1': {
+      const idx = a.kind === 'choice' ? a.index : -1;
+      return {
+        class: idx === q.correct ? 'correct' : 'wrong', tags: q.tags, given: q.options[idx] ?? '',
+        expected: q.options[q.correct] ?? '', prompt: stripAccent(q.lemma.accented),
+      };
+    }
+    case 'T2': {
+      const text = a.kind === 'text' ? a.text : '';
+      const r = classify({ given: text, expected: q.expected, yoLenient: opts.yoLenient });
+      return { class: r.class, tags: withTag(q.tags, r.tag), given: text, expected: q.expected.primary, prompt: q.gloss };
+    }
+    case 'T3':
+    case 'T4': {
+      const text = a.kind === 'text' ? a.text : '';
+      const r = classify({ given: text, expected: q.expected, lemma: q.lemma, feat: q.feat, yoLenient: opts.yoLenient });
+      const prompt = q.type === 'T3'
+        ? `${q.lemma.bare} / ${q.feat.replace(/^case\./, '')}`
+        : `${q.sentence} (${q.lemma.bare})`;
+      return { class: r.class, confusion: r.confusion, tags: withTag(q.tags, r.tag), given: text, expected: q.expected.primary, prompt };
+    }
+    case 'T5': {
+      const idx = a.kind === 'stress' ? a.index : -1;
+      const mark = (i: number) => (i >= 0 && i < q.word.length ? q.word.slice(0, i + 1) + '\u0301' + q.word.slice(i + 1) : '');
+      return {
+        class: q.stressed.includes(idx) ? 'correct' : 'wrong', tags: q.tags, given: mark(idx),
+        expected: q.lemma.accented, prompt: q.word,
+      };
+    }
+    case 'T6': {
+      const text = a.kind === 'text' ? a.text : '';
+      const g = normalizeSentence(text, opts);
+      const e = normalizeSentence(q.sentence, opts);
+      let cls: AnswerClass;
+      if (g === e) cls = 'correct';
+      else if (normalizeSentence(text, { yoLenient: true }) === normalizeSentence(q.sentence, { yoLenient: true })) cls = 'orthographic';
+      else if (damerauLevenshtein(g, e) === 1) cls = 'typo';
+      else cls = 'wrong';
+      return { class: cls, tags: q.tags, given: text, expected: q.sentence, prompt: '(dictation)' };
+    }
+  }
+}
+
+/** Japanese description of what is being asked (T3). */
+export function targetLabel(q: QuestionT3 | QuestionT4): string {
+  return featLabelJa(q.feat, q.lemma);
+}

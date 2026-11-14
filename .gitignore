@@ -1,0 +1,6 @@
+node_modules
+dist
+/data/raw/
+/public/dict/dict.json
+/public/dict/dict.meta.json
+.env*.local
