@@ -1,8 +1,8 @@
 import type { LemmaRow } from './db';
 import { db } from './db';
 
-export type AITask = 'analyze' | 'gloss' | 'explain' | 'note' | 'grade_t7';
-export const AI_TASKS: AITask[] = ['analyze', 'gloss', 'explain', 'note', 'grade_t7'];
+export type AITask = 'analyze' | 'gloss' | 'explain' | 'note' | 'grade_t7' | 'aspect_items';
+export const AI_TASKS: AITask[] = ['analyze', 'gloss', 'explain', 'note', 'grade_t7', 'aspect_items'];
 
 export type Settings = {
   dictVersion: string;
@@ -35,6 +35,7 @@ export const DEFAULT_MODELS: Record<AITask, string> = {
   explain: 'gemini-3.5-flash-lite',
   note: 'gemini-3.5-flash-lite',
   grade_t7: 'gemini-3.5-flash-lite',
+  aspect_items: 'gemini-3.5-flash-lite',
 };
 
 export const DEFAULTS: Settings = {

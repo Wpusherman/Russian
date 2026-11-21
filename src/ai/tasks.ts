@@ -6,16 +6,16 @@ import { isValidTag } from '../core/tags';
 import { db, type BacklogRow, type LemmaRow, type PlanRow } from '../db/db';
 import { findLemmas } from '../db/dict';
 import { setSetting } from '../db/settings';
-import { addT4Item, glossCandidates, setUnitState, type StudyContext } from '../db/study';
+import { addT4Item, addT10Item, glossCandidates, setUnitState, type StudyContext } from '../db/study';
 import { saveGlosses } from '../db/wordlists';
 import { ptDate } from './gemini';
 import { buildAnalyzePacket } from './packet';
 import type { AIProvider } from './provider';
 import {
-  analyzeJsonSchema, explainJsonSchema, glossJsonSchema, noteJsonSchema,
-  type AnalyzeOutput, type ExplainOutput, type GlossOutput, type NewItem, type NoteOutput,
+  analyzeJsonSchema, aspectItemsJsonSchema, explainJsonSchema, glossJsonSchema, noteJsonSchema,
+  type AnalyzeOutput, type AspectItem, type AspectItemsOutput, type ExplainOutput, type GlossOutput, type NewItem, type NoteOutput,
 } from './schemas';
-import { validateNewItem } from './validate';
+import { validateAspectItem, validateNewItem } from './validate';
 
 export const WEIGHT_TTL_MS = 14 * DAY_MS;
 export const ANALYZE_INTERVAL_MS = 7 * DAY_MS;
@@ -69,7 +69,7 @@ export async function importAnalysis(out: AnalyzeOutput, ctx: Pick<StudyContext,
     const reason = await registerNewItem(item, ctx.settings.yoLenient, now);
     if (reason === null) added++;
     else {
-      await db.quarantine.add({ ts: now, payload: item, reason });
+      await db.quarantine.add({ ts: now, kind: 't4', payload: item, reason });
       quarantined++;
     }
   }
@@ -124,6 +124,65 @@ export async function runGloss(provider: AIProvider, ctx: Pick<StudyContext, 'ca
     if (valid.has(it.id) && ja) glosses[it.id] = ja; // unknown ids are ignored
   }
   return saveGlosses(glosses);
+}
+
+// ---------- aspect_items (A5 / T10) ----------
+
+export type AspectImport = { added: number; quarantined: number; pairs: number };
+
+/** Validate one AI aspect item and register it as T10, or return the reason it failed. */
+export async function registerAspectItem(item: AspectItem, yoLenient: boolean, now = Date.now()): Promise<string | null> {
+  const [impfCandidates, pfCandidates] = await Promise.all([findLemmas(item.impf), findLemmas(item.pf)]);
+  const v = validateAspectItem(item, impfCandidates, pfCandidates, { yoLenient });
+  if (!v.ok) return v.reason;
+  await addT10Item({
+    sentence_ru: item.sentence_ru, lemma: v.lemma.bare, lemmaId: v.lemma.id, feat: item.feat, answer: item.answer,
+    translation_ja: item.translation_ja, explain_ja: item.cue_ja, impf: v.impf.bare, pf: v.pf.bare,
+    correct: item.correct, cue_ja: item.cue_ja,
+  }, now);
+  return null;
+}
+
+/** Learned aspect pairs (T1 done) as [{impf, pf}], at most 10. */
+export async function learnedAspectPairs(cards: StudyContext['cards']): Promise<{ impf: string; pf: string }[]> {
+  const learned = new Set(cards.filter((c) => c.type === 'T1').map((c) => c.lemmaId));
+  const verbs = await db.lemmas.where('pos').equals('verb').toArray();
+  const byId = new Map(verbs.map((v) => [v.id, v]));
+  const out: { impf: string; pf: string }[] = [];
+  const seen = new Set<string>();
+  for (const l of verbs) {
+    if (out.length >= 10) break;
+    if (!learned.has(l.id) || (l.aspect !== 'impf' && l.aspect !== 'pf')) continue;
+    for (const pid of l.partnerIds ?? []) {
+      const p = byId.get(pid);
+      if (!p || (p.aspect !== 'impf' && p.aspect !== 'pf') || p.aspect === l.aspect) continue;
+      const impf = l.aspect === 'impf' ? l : p;
+      const pf = l.aspect === 'pf' ? l : p;
+      const key = `${impf.id}|${pf.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ impf: impf.bare, pf: pf.bare });
+      break;
+    }
+  }
+  return out;
+}
+
+export async function runAspectItems(provider: AIProvider, ctx: Pick<StudyContext, 'cards' | 'settings'>): Promise<AspectImport> {
+  const pairs = await learnedAspectPairs(ctx.cards);
+  if (pairs.length === 0) return { added: 0, quarantined: 0, pairs: 0 };
+  const out = await provider.run<AspectItemsOutput>('aspect_items', pairs, aspectItemsJsonSchema);
+  let added = 0;
+  let quarantined = 0;
+  for (const item of out.items) {
+    const reason = await registerAspectItem(item, ctx.settings.yoLenient);
+    if (reason === null) added++;
+    else {
+      await db.quarantine.add({ ts: Date.now(), kind: 't10', payload: item, reason });
+      quarantined++;
+    }
+  }
+  return { added, quarantined, pairs: pairs.length };
 }
 
 // ---------- note ----------

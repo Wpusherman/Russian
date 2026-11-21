@@ -25,7 +25,9 @@ export function tagStats(attempts: StatAttempt[], now: number): Map<string, TagS
   for (const a of attempts) {
     if (a.ts < from || a.ts > now) continue;
     const ok = isCorrectClass(a.class) ? 1 : 0;
-    for (const tag of new Set(a.tags)) {
+    // A5: legacy attempts tagged "verb.aspect" are read as the aspect-pair tag.
+    const tags = new Set(a.tags.map((t) => (t === 'verb.aspect' ? 'verb.aspect.pair' : t)));
+    for (const tag of tags) {
       let s = acc.get(tag);
       if (!s) acc.set(tag, (s = { n: 0, k: 0, rn: 0, rk: 0, on: 0, ok: 0 }));
       s.n++;

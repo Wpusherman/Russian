@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { analysisDue, runAnalyze, runGloss, type AnalysisImport } from '../ai/tasks';
+import { analysisDue, runAnalyze, runAspectItems, runGloss, type AnalysisImport, type AspectImport } from '../ai/tasks';
 import { WEAK_MIN_N } from '../core/session';
 import { tagLabelJa } from '../core/tags';
+import { db } from '../db/db';
 import { glossCandidates, loadContext } from '../db/study';
 import { AiErrorBox, lbColor, navigate, pct, useAiTask, useAsync } from './common';
 import { useState } from 'react';
@@ -10,16 +11,19 @@ export function HomePage(): ReactNode {
   const { data, error, reload } = useAsync(async () => {
     const ctx = await loadContext();
     const gloss = await glossCandidates(ctx.cards);
-    return { ctx, glossCount: gloss.length };
+    const aspectCount = await db.items.where('type').equals('T10').count();
+    return { ctx, glossCount: gloss.length, aspectCount };
   }, []);
   const analyze = useAiTask();
   const gloss = useAiTask();
   const [analysis, setAnalysis] = useState<AnalysisImport | null>(null);
   const [glossDone, setGlossDone] = useState<number | null>(null);
+  const aspect = useAiTask();
+  const [aspectDone, setAspectDone] = useState<AspectImport | null>(null);
 
   if (error) return <div className="box error">{error}</div>;
   if (!data) return <p className="muted">読み込み中…</p>;
-  const { ctx, glossCount } = data;
+  const { ctx, glossCount, aspectCount } = data;
   const due = analysisDue(ctx);
   const weak = [...ctx.stats.values()].filter((s) => s.n >= WEAK_MIN_N).sort((a, b) => b.weakness - a.weakness).slice(0, 5);
   const noteSeen = ctx.unitStates.get(ctx.current.id)?.noteSeen;
@@ -27,6 +31,7 @@ export function HomePage(): ReactNode {
   const start = () => navigate(noteSeen ? 'session' : `units/${ctx.current.id}`);
   const doAnalyze = () => void analyze.run(async (p) => { setAnalysis(await runAnalyze(p, ctx)); reload(); });
   const doGloss = () => void gloss.run(async (p) => { setGlossDone(await runGloss(p, ctx)); reload(); });
+  const doAspect = () => void aspect.run(async (p) => { setAspectDone(await runAspectItems(p, ctx)); reload(); });
 
   return (
     <div>
@@ -86,6 +91,24 @@ export function HomePage(): ReactNode {
           {analyze.busy ? '分析中…' : '分析する'}
         </button>
       </section>
+
+      {aspectCount === 0 && (
+        <section className="card banner">
+          <div>
+            <h2>体の使い分けドリル（AI）</h2>
+            <p className="muted">文脈から完了体／不完了体を選ぶ問題（T10）の在庫がありません。学習済みの体のペアから生成します。</p>
+            {aspectDone && (
+              <p className={aspectDone.pairs === 0 ? 'muted' : 'ok-text'}>
+                {aspectDone.pairs === 0
+                  ? '学習済みの体のペアがありません（先に動詞のT1を学習してください）。'
+                  : `追加 ${aspectDone.added}件・検疫 ${aspectDone.quarantined}件（ペア ${aspectDone.pairs}組）。`}
+              </p>
+            )}
+            <AiErrorBox task={aspect} />
+          </div>
+          <button disabled={aspect.busy} onClick={doAspect}>{aspect.busy ? '生成中…' : '体のドリルを生成'}</button>
+        </section>
+      )}
 
       <section className="card banner">
         <div>

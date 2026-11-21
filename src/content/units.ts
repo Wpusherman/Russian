@@ -26,7 +26,7 @@ export const UNITS: Unit[] = [
   unit('U11', '与格', ['noun.dat.sg']),
   unit('U12', '造格', ['noun.ins.sg', 'prep.с']),
   unit('U13', '複数の斜格', ['noun.*.pl', 'adj.*.pl']),
-  unit('U14', '体', ['verb.aspect']),
+  unit('U14', '体', ['verb.aspect.pair', 'verb.aspect.choice']),
   unit('U15', '運動の動詞', ['verb.motion']),
 ];
 

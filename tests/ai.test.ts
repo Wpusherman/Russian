@@ -4,8 +4,8 @@ import { ManualProvider, buildManualPrompt } from '../src/ai/manual';
 import { buildAnalyzePacket, PACKET_MAX_CHARS } from '../src/ai/packet';
 import { APP_FEATURES, SYSTEM_PROMPTS } from '../src/ai/prompts';
 import { AIError, parseTaskOutput, stripFence } from '../src/ai/provider';
-import { analyzeJsonSchema, explainJsonSchema, type AnalyzeOutput, type NewItem } from '../src/ai/schemas';
-import { validateNewItem } from '../src/ai/validate';
+import { analyzeJsonSchema, explainJsonSchema, type AnalyzeOutput, type AspectItem, type NewItem } from '../src/ai/schemas';
+import { validateAspectItem, validateNewItem } from '../src/ai/validate';
 import { DAY_MS, tagStats } from '../src/core/stats';
 import type { Attempt, Lemma } from '../src/core/types';
 import { DEFAULT_MODELS } from '../src/db/settings';
@@ -205,6 +205,31 @@ describe('APP_FEATURES', () => {
     expect(SYSTEM_PROMPTS.analyze).toContain('重複させない');
     expect(SYSTEM_PROMPTS.analyze).toContain('samples に実在する誤答');
     expect(SYSTEM_PROMPTS.analyze).toContain('解答送信前に正解の手がかり');
+  });
+});
+
+describe('validateAspectItem (A5)', () => {
+  const impf: Lemma = {
+    id: 'v-читать', bare: 'читать', accented: 'чита́ть', pos: 'verb', rank: 10, level: 'A1', aspect: 'impf', partnerIds: ['v-прочитать'],
+    glossEn: ['read'], forms: { 'past.m': { primary: 'чита́л', variants: [] } },
+  };
+  const pf: Lemma = {
+    id: 'v-прочитать', bare: 'прочитать', accented: 'прочита́ть', pos: 'verb', rank: 11, level: 'A1', aspect: 'pf', partnerIds: ['v-читать'],
+    glossEn: ['read'], forms: { 'past.m': { primary: 'прочита́л', variants: [] } },
+  };
+  const item: AspectItem = {
+    sentence_ru: 'Вчера я ___ всю книгу.', impf: 'читать', pf: 'прочитать', correct: 'pf', feat: 'past.m',
+    answer: 'прочитал', translation_ja: '昨日私は本を全部読んだ。', cue_ja: 'вчера＋結果',
+  };
+  it('accepts a valid pair item and rejects broken ones', () => {
+    expect(validateAspectItem(item, [impf], [pf])).toMatchObject({ ok: true, lemma: pf, feat: 'past.m' });
+    expect(validateAspectItem({ ...item, sentence_ru: 'Вчера я всю книгу.' }, [impf], [pf]).ok).toBe(false);
+    expect(validateAspectItem({ ...item, sentence_ru: '___ и ___.' }, [impf], [pf]).ok).toBe(false);
+    expect(validateAspectItem({ ...item, answer: 'читал' }, [impf], [pf]).ok).toBe(false);
+    expect(validateAspectItem({ ...item, feat: 'pres.1sg' }, [impf], [pf]).ok).toBe(false);
+    expect(validateAspectItem(item, [{ ...impf, partnerIds: [] }], [pf]).ok).toBe(false);
+    expect(validateAspectItem({ ...item, pf: 'спать' }, [impf], [pf]).ok).toBe(false);
+    expect(validateAspectItem({ ...item, feat: 'gender' }, [impf], [pf]).ok).toBe(false);
   });
 });
 

@@ -121,7 +121,7 @@ export function tagsForFeat(lemma: Lemma, feat: FeatKey): string[] {
   const tags: string[] = [];
   const bare = normalize(lemma.bare);
   if (feat === GENDER_FEAT) return ['noun.gender'];
-  if (feat === ASPECT_FEAT) return ['verb.aspect'];
+  if (feat === ASPECT_FEAT) return ['verb.aspect.pair'];
   const p = feat.split('.');
   if (p[0] === 'case') {
     if (PERSONAL_PRONOUNS.includes(bare) && lemma.pos === 'other') tags.push('pron.personal');

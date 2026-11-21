@@ -3,10 +3,11 @@ import { CLASS_JA, classify, damerauLevenshtein, ratingFor } from '../src/core/c
 import { aspectNote, isUncertainGloss } from '../src/core/grade';
 import { normalize } from '../src/core/normalize';
 import { confusionCounts, DAY_MS, tagStats, wilsonLB } from '../src/core/stats';
-import { aspectBadge, expandTagPattern, tagsForFeat, verbConjType, confusionLabelJa } from '../src/core/tags';
+import { ASPECT_FEAT, aspectBadge, expandTagPattern, tagsForFeat, verbConjType, confusionLabelJa } from '../src/core/tags';
 import { TRANSLIT_TABLE, translit, translitLive } from '../src/core/translit';
 import { mergeGloss, parseWordlistText } from '../src/core/wordlist';
 import type { Attempt, Form, Lemma } from '../src/core/types';
+import { UNITS } from '../src/content/units';
 import { alternationFor, convertAccent, inferGender, splitForms, spellExceptionForms } from '../scripts/build-dict';
 
 const form = (primary: string, ...variants: string[]): Form => ({ primary, variants });
@@ -259,6 +260,20 @@ describe('aspect (A1-A4)', () => {
     expect(t3.class).toBe('wrong_aspect');
     expect(ratingFor({ class: 'wrong_aspect', type: 'T3', hintUsed: false, latencyMs: 1000 })).toBe(1);
     expect(CLASS_JA.wrong_aspect).toBe('体の取り違え');
+  });
+});
+
+describe('aspect tag split (A5)', () => {
+  it('tags the pseudo aspect form as verb.aspect.pair', () => {
+    expect(tagsForFeat(govorit, ASPECT_FEAT)).toEqual(['verb.aspect.pair']);
+  });
+  it('U14 uses pair and choice; legacy attempts map to pair', () => {
+    const u14 = UNITS.find((u) => u.id === 'U14')!;
+    expect([...u14.tags].sort()).toEqual(['verb.aspect.choice', 'verb.aspect.pair']);
+    const now = Date.UTC(2026, 5, 30);
+    const stats = tagStats([{ ts: now, class: 'correct', tags: ['verb.aspect'] }], now);
+    expect(stats.has('verb.aspect')).toBe(false);
+    expect(stats.get('verb.aspect.pair')).toMatchObject({ n: 1, k: 1 });
   });
 });
 

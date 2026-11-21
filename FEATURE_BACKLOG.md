@@ -84,15 +84,3 @@ FEATURE_BACKLOG.md の「動詞活用形入力時のリアルタイム語幹変�
 ### B5（低優先）アクセント入力（旧: アクセント付き単語タイピング・トグル機能）
 - Translit・OSキーボードの両モードで、母音の直後に `=` を入力すると、その母音に U+0301 を付ける（`=` 自体は消える）。
 - T2・T3 で解答にアクセント記号が含まれていた場合のみ、位置の正誤を結果画面に別に表示し、attempts.stressOk に記録する。評価には影響させない。stats では、stressOk を持つ解答を phon.stress の解答としても集計する。
-
-## その他
-### A5 体の使い分けドリル（U14で解放）
-- タグ verb.aspect を verb.aspect.pair（既存の擬似 FeatKey `aspect` のT3、A3）と verb.aspect.choice（文脈での選択）に分割する。U14 のタグはこの2つにする。既存の attempts の verb.aspect は verb.aspect.pair に読み替える。
-- 新タイプ T10: 文脈つきの穴埋め文に、ペアの両方の不定形を並べて表示し、正しい体の正しい形を入力させる。例: 「Вчера я ___ всю книгу.（читать / прочитать）」→ прочитал。
-- 生成: AITask に 'aspect_items' を追加する（モデル・thinking_level は gloss と同じ）。入力は学習済みのペア最大10組 `[{impf, pf}]`。出力スキーマ:
-  `{"items":[{"sentence_ru":string,"impf":string,"pf":string,"correct":"impf"|"pf","feat":string,"answer":string,"translation_ja":string,"cue_ja":string}]}`（最大20件。cue_ja は判断の手がかり（例:「всю＋過去＝完了した結果」）を60字以内で書く）。
-- 検証（validate.ts に追加）: 空欄 `___` がちょうど1個ある／impf と pf が辞書に存在し、互いに partnerIds で結ばれている／correct 側の lemma に feat が存在し、normalize(answer) が forms[feat] と一致する。1つでも失敗したら検疫に入れる。
-- 採点: classify は T4 と同じ（相手側の同じ feat の形なら A3 の wrong_aspect になる）。タグは verb.aspect.choice。結果画面に cue_ja を表示する。
-- system_instruction（aspect_items）:「ロシア語の体の使い分けを練習する穴埋め文を作る。文は8語以内、語彙はA1-A2。体を一意に決める手がかり（каждый день, часто, долго / уже, наконец, вчера＋結果, всю и т.п.）を必ず文中に含め、両方の体が自然に成り立つ文は作らない。impf と pf は入力のペアのみを使う。」
-- session: 弱点枠で verb.aspect.choice が選ばれたら T10 のカードを出す。在庫がなければ、ホームに「体のドリルを生成」バナーを出す。
-

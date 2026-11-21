@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { analyzeZ, type AnalyzeOutput, type NewItem } from '../ai/schemas';
-import { backlogMarkdown, registerNewItem } from '../ai/tasks';
+import { analyzeZ, type AnalyzeOutput, type AspectItem, type NewItem } from '../ai/schemas';
+import { backlogMarkdown, registerAspectItem, registerNewItem } from '../ai/tasks';
 import { tagLabelJa } from '../core/tags';
 import { db, type QuarantineRow } from '../db/db';
 import { loadSettings } from '../db/settings';
@@ -62,15 +62,20 @@ const FIELDS: [keyof NewItem, string][] = [
 ];
 
 function QuarantineItem({ row, onDone }: { row: QuarantineRow; onDone: () => void }): ReactNode {
+  const isAspect = row.kind === 't10';
   const [item, setItem] = useState<NewItem>({
     sentence_ru: '', lemma: '', feat: '', answer: '', translation_ja: '', explain_ja: '', ...(row.payload as Partial<NewItem>),
+  });
+  const [aspect, setAspect] = useState<AspectItem>({
+    sentence_ru: '', impf: '', pf: '', correct: 'impf', feat: '', answer: '', translation_ja: '', cue_ja: '',
+    ...(row.payload as Partial<AspectItem>),
   });
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const approve = async () => {
     const s = await loadSettings();
-    const reason = await registerNewItem(item, s.yoLenient);
+    const reason = isAspect ? await registerAspectItem(aspect, s.yoLenient) : await registerNewItem(item, s.yoLenient);
     if (reason !== null) {
       setError(`まだ検証を通りません：${reason}`);
       setEditing(true);
@@ -83,16 +88,39 @@ function QuarantineItem({ row, onDone }: { row: QuarantineRow; onDone: () => voi
     await db.quarantine.delete(row.id!);
     onDone();
   };
+  const sentence = isAspect ? aspect.sentence_ru : item.sentence_ru;
   return (
     <section className="card">
-      <div className="row between"><b className="ru">{item.sentence_ru}</b><span className="muted small-text">{fmtDate(row.ts)}</span></div>
+      <div className="row between"><b className="ru">{sentence}</b><span className="muted small-text">{fmtDate(row.ts)}</span></div>
       <div className="box error">理由：{row.reason}</div>
       {editing ? (
-        <div className="form-grid">
-          {FIELDS.map(([k, label]) => (
-            <label key={k}>{label}<input value={item[k]} onChange={(e) => setItem({ ...item, [k]: e.target.value })} /></label>
-          ))}
-        </div>
+        isAspect ? (
+          <div className="form-grid">
+            <label>文（___ を1つ）<input value={aspect.sentence_ru} onChange={(e) => setAspect({ ...aspect, sentence_ru: e.target.value })} /></label>
+            <label>不完了体<input value={aspect.impf} onChange={(e) => setAspect({ ...aspect, impf: e.target.value })} /></label>
+            <label>完了体<input value={aspect.pf} onChange={(e) => setAspect({ ...aspect, pf: e.target.value })} /></label>
+            <label>正解の体
+              <select value={aspect.correct} onChange={(e) => setAspect({ ...aspect, correct: e.target.value === 'pf' ? 'pf' : 'impf' })}>
+                <option value="impf">不完了体</option><option value="pf">完了体</option>
+              </select>
+            </label>
+            <label>feat<input value={aspect.feat} onChange={(e) => setAspect({ ...aspect, feat: e.target.value })} /></label>
+            <label>答え<input value={aspect.answer} onChange={(e) => setAspect({ ...aspect, answer: e.target.value })} /></label>
+            <label>和訳<input value={aspect.translation_ja} onChange={(e) => setAspect({ ...aspect, translation_ja: e.target.value })} /></label>
+            <label>手がかり（60字以内）<input value={aspect.cue_ja} onChange={(e) => setAspect({ ...aspect, cue_ja: e.target.value })} /></label>
+          </div>
+        ) : (
+          <div className="form-grid">
+            {FIELDS.map(([k, label]) => (
+              <label key={k}>{label}<input value={item[k]} onChange={(e) => setItem({ ...item, [k]: e.target.value })} /></label>
+            ))}
+          </div>
+        )
+      ) : isAspect ? (
+        <p className="muted">
+          {aspect.impf} / {aspect.pf} → <span className="ru">{aspect.correct === 'pf' ? aspect.pf : aspect.impf}</span> {aspect.feat} ={' '}
+          <span className="ru">{aspect.answer}</span> ・ {aspect.cue_ja}
+        </p>
       ) : (
         <p className="muted">
           {item.lemma} / {item.feat} → <span className="ru">{item.answer}</span> ・ {item.translation_ja}

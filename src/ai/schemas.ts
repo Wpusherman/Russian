@@ -52,6 +52,26 @@ export const explainZ = z.object({ explain_ja: z.string() });
 export type ExplainOutput = z.infer<typeof explainZ>;
 export const explainJsonSchema: JSONSchema = obj(['explain_ja'], { explain_ja: str });
 
+// ---------- aspect_items (A5 / T10) ----------
+
+export const aspectItemsZ = z.object({
+  items: z.array(z.object({
+    sentence_ru: z.string(), impf: z.string(), pf: z.string(), correct: z.union([z.literal('impf'), z.literal('pf')]),
+    feat: z.string(), answer: z.string(), translation_ja: z.string(), cue_ja: z.string().max(60),
+  })).max(20),
+});
+export type AspectItemsOutput = z.infer<typeof aspectItemsZ>;
+export type AspectItem = AspectItemsOutput['items'][number];
+export const aspectItemsJsonSchema: JSONSchema = obj(['items'], {
+  items: {
+    type: 'array', maxItems: 20,
+    items: obj(['sentence_ru', 'impf', 'pf', 'correct', 'feat', 'answer', 'translation_ja', 'cue_ja'], {
+      sentence_ru: str, impf: str, pf: str, correct: { type: 'string', enum: ['impf', 'pf'] },
+      feat: str, answer: str, translation_ja: str, cue_ja: { type: 'string', maxLength: 60 },
+    }),
+  },
+});
+
 // ---------- grade_t7 (M7) ----------
 
 export const gradeT7Z = z.object({
@@ -69,8 +89,9 @@ export const gradeT7JsonSchema: JSONSchema = obj(['results'], {
 });
 
 export const ZOD_BY_TASK: Record<AITask, z.ZodType> = {
-  analyze: analyzeZ, gloss: glossZ, note: noteZ, explain: explainZ, grade_t7: gradeT7Z,
+  analyze: analyzeZ, gloss: glossZ, note: noteZ, explain: explainZ, grade_t7: gradeT7Z, aspect_items: aspectItemsZ,
 };
 export const JSON_SCHEMA_BY_TASK: Record<AITask, JSONSchema> = {
   analyze: analyzeJsonSchema, gloss: glossJsonSchema, note: noteJsonSchema, explain: explainJsonSchema, grade_t7: gradeT7JsonSchema,
+  aspect_items: aspectItemsJsonSchema,
 };

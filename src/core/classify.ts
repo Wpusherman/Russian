@@ -119,7 +119,7 @@ export function classify(input: ClassifyInput): ClassifyResult {
 }
 
 export const LATENCY_LIMIT_MS: Record<ItemType, number> = {
-  T1: 6000, T2: 15000, T3: 15000, T4: 15000, T5: 15000, T6: 40000, T11: 15000,
+  T1: 6000, T2: 15000, T3: 15000, T4: 15000, T5: 15000, T6: 40000, T10: 15000, T11: 15000,
 };
 
 export function isCorrectClass(c: AnswerClass): boolean {

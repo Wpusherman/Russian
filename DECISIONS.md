@@ -65,6 +65,8 @@
 - 同表記の辞書語が複数あるときは登録前に候補（id と訳）を選ばせ、choices で lemmaId を指定して登録する。未指定なら頻度順位が最小の1件。
 - 動詞の訳語には体のバッジ（impf〔不完〕/pf〔完〕/both〔両体〕）を付け、結果画面にペアを1行表示する。T1の誤答肢からは partnerIds と同一表示訳を除き、T2ではペアの表示訳が同一なら（過程・反復）/（1回・完了）を添える。
 - classify は wrong_form の直後に wrong_aspect を判定する（T2は相手の不定形、T3/T4は同じ FeatKey の形）。評価は Again、タグは verb.aspect.pair、confusion には体を記録する。
+- AITask `aspect_items` を追加し、学習済み（T1済み）の体ペア最大10組からT10を生成する。検証は空欄1個・相互partnerIds・correct側のfeatとanswer一致で、失敗は検疫（kind:'t10'）に入れる。T10の在庫が0ならホームに生成バナーを出す。
+- T10は文脈穴埋めで体を選ばせ、タグは verb.aspect.choice。classify はT4と同じで、相手側の形なら wrong_aspect（verb.aspect.pair）も付く。U14のタグは pair/choice に分割し、旧 verb.aspect は統計で pair と読み替える。
 - T11 は数詞の格支配（1→nom.sg、2-4→gen.sg、それ以外→gen.pl、11-14はgen.pl）で名詞形を問い、1・2 は数詞も性一致で入力させる。数は1-30/40/50/100/1000、名詞はA1-A2でgen.plを持つ語。
 - 単語リスト登録のサマリに「訳がなく出題対象外」の件数と語一覧（最大10語）を出し、リスト一覧に各リストの出題可能語数を表示する。
 - 単語リストの見出し語にキリル文字がなければ translit() で変換してから照合・保存する（/ 区切りも既存規則どおり）。

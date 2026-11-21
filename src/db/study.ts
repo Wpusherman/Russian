@@ -11,7 +11,7 @@ import { startOfDay, tagStats, type TagStat } from '../core/stats';
 import { aspectBadge, expectedForm, prepTag, tagsForFeat } from '../core/tags';
 import type { Attempt, RatingNum } from '../core/types';
 import { normalize } from '../core/normalize';
-import { db, type CardRow, type ItemRow, type LemmaRow, type T4Payload, type UnitStateRow } from './db';
+import { db, type CardRow, type ItemRow, type LemmaRow, type T10Payload, type T4Payload, type UnitStateRow } from './db';
 import { loadSettings, type Settings } from './settings';
 
 export type StudyContext = {
@@ -192,8 +192,8 @@ async function partnersOf(lemma: LemmaRow): Promise<LemmaRow[]> {
 /** Turn a planned item into a displayable question. Returns null when its data no longer exists. */
 export async function buildQuestion(p: PlannedItem, rng: () => number = Math.random): Promise<Question | null> {
   const { type, ref, feat } = parseItemId(p.itemId);
-  if (type === 'T4' || type === 'T6') {
-    const item = await db.items.get(type === 'T4' ? p.itemId : `T4:${ref}`);
+  if (type === 'T4' || type === 'T6' || type === 'T10') {
+    const item = await db.items.get(type === 'T6' ? `T4:${ref}` : p.itemId);
     if (!item) return null;
     const lemma = await db.lemmas.get(item.payload.lemmaId);
     if (!lemma) return null;
@@ -204,6 +204,14 @@ export async function buildQuestion(p: PlannedItem, rng: () => number = Math.ran
         type: 'T4', itemId: p.itemId, lemmaId: lemma.id, tags: item.tags, lemma, feat: pl.feat,
         sentence: pl.sentence_ru, translation: pl.translation_ja, explain: pl.explain_ja, expected,
         partners: await partnersOf(lemma),
+      };
+    }
+    if (type === 'T10') {
+      const t10 = pl as T10Payload;
+      return {
+        type: 'T10', itemId: p.itemId, lemmaId: lemma.id, tags: item.tags, lemma, feat: t10.feat,
+        sentence: t10.sentence_ru, translation: t10.translation_ja, cue: t10.cue_ja, impf: t10.impf, pf: t10.pf,
+        expected, partners: await partnersOf(lemma),
       };
     }
     return {
@@ -277,7 +285,7 @@ export async function buildSession(ctx: StudyContext, opts: { ttsAvailable: bool
   const extra: ExtraItem[] = items
     .filter((it) => !hasCard.has(it.id))
     .filter((it) => it.tags.filter((t) => !t.startsWith('spell.')).every((t) => unlockedSet.has(t)))
-    .map((it) => ({ item: { itemId: it.id, type: 'T4', lemmaId: it.payload.lemmaId, slot: 'weak' }, tags: it.tags }));
+    .map((it) => ({ item: { itemId: it.id, type: it.type, lemmaId: it.payload.lemmaId, slot: 'weak' }, tags: it.tags }));
   // T11 numeral items are generated locally (no AI): a few numbers for a sample of A1-A2 nouns.
   const [a1nouns, a2nouns] = await Promise.all([
     db.lemmas.where('level').equals('A1').toArray(), db.lemmas.where('level').equals('A2').toArray(),
@@ -341,6 +349,17 @@ export async function addT4Item(payload: T4Payload, lemma: LemmaRow, source: 'ai
   const row: ItemRow = {
     id: `T4:${next}`, type: 'T4', payload, tags: t4Tags(lemma, payload.feat, payload.sentence_ru), source, createdAt: now,
   };
+  await db.items.add(row);
+  return row;
+}
+
+/** Register a validated aspect-choice item (T10). */
+export async function addT10Item(payload: T10Payload, now = Date.now()): Promise<ItemRow> {
+  const all = await db.items.toArray();
+  const dup = all.find((i) => i.type === 'T10' && i.payload.sentence_ru === payload.sentence_ru);
+  if (dup) return dup;
+  const next = all.filter((i) => i.type === 'T10').reduce((m, i) => Math.max(m, Number(i.id.slice(4)) || 0), 0) + 1;
+  const row: ItemRow = { id: `T10:${next}`, type: 'T10', payload, tags: ['verb.aspect.choice'], source: 'ai', createdAt: now };
   await db.items.add(row);
   return row;
 }

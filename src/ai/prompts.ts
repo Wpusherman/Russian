@@ -10,6 +10,7 @@ export const APP_FEATURES: string[] = [
   'T6 ディクテーション',
   'T11 数詞と格',
   '体のバッジと取り違え判定',
+  '体の使い分けドリル（T10）',
   '語形の自動タグ付け',
   '弱点タグの統計と信頼下限',
   'AI弱点分析とタグ重み',
@@ -41,6 +42,10 @@ body_md は1500字以内のMarkdown。要点を先に書き、語尾の表はMar
 body_md には必ず改行文字を入れる：見出し・段落・箇条書きの各項目・表の各行はそれぞれ別の行にし、見出しや表の前後は空行で区切る。`,
   explain: `あなたはロシア語教師。学習者（日本語話者の初級者）の誤答 {prompt, expected, given, class, tags} について、
 なぜ expected が正しく given が誤りなのかを日本語200字以内で説明する。規則を1つに絞り、覚え方があれば添える。出力は {"explain_ja"}。`,
+  aspect_items: `ロシア語の体の使い分けを練習する穴埋め文を作る。文は8語以内、語彙はA1-A2。体を一意に決める手がかり（каждый день, часто, долго / уже, наконец, вчера＋結果, всю и т.п.）を必ず文中に含め、両方の体が自然に成り立つ文は作らない。impf と pf は入力のペアのみを使う。
+入力は [{impf, pf}] の配列。出力は {"items":[{"sentence_ru","impf","pf","correct","feat","answer","translation_ja","cue_ja"}]}（最大20件）。
+sentence_ru には空欄"___"をちょうど1つ入れる。correct は 'impf' か 'pf'。feat は case.<nom|gen|dat|acc|ins|prep>.<sg|pl> / past.<m|f|n|pl> / pres.<1sg..3pl> / adj.<case>.<m|f|n|pl>。
+answer は correct 側の活用形（アクセント記号なし）。cue_ja は判断の手がかりを60字以内の日本語で書く。`,
   grade_t7: `あなたはロシア語教師。入力は和文露訳の解答の配列 [{attemptId, ja, given}]。
 それぞれを採点し、score は 0（誤り）/ 0.5（意味は通じるが誤りあり）/ 1（正しい）、corrected に自然で正しいロシア語、comment_ja に日本語80字以内の講評を書く。
 出力は {"results":[{"attemptId","score","corrected","comment_ja"}]}。`,

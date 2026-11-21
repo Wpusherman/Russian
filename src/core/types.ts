@@ -28,7 +28,7 @@ export type Lemma = {
   forms: Record<FeatKey, Form>;
 };
 
-export type ItemType = 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6' | 'T11';
+export type ItemType = 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6' | 'T10' | 'T11';
 export type AnswerClass = 'correct' | 'orthographic' | 'wrong_form' | 'wrong_aspect' | 'spelling_rule' | 'typo' | 'wrong';
 export type Confusion = { expected: FeatKey; given: FeatKey };
 /** FSRS rating: 1 Again, 2 Hard, 3 Good, 4 Easy */

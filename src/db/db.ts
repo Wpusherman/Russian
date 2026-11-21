@@ -10,13 +10,14 @@ export type CardRow = FsrsFields & { id: string; type: ItemType; lemmaId: string
 export type T4Payload = {
   sentence_ru: string; lemma: string; lemmaId: string; feat: FeatKey; answer: string; translation_ja: string; explain_ja: string;
 };
-export type ItemRow = { id: string; type: 'T4'; payload: T4Payload; tags: string[]; source: 'ai' | 'user'; createdAt: number };
+export type T10Payload = T4Payload & { impf: string; pf: string; correct: 'impf' | 'pf'; cue_ja: string };
+export type ItemRow = { id: string; type: 'T4' | 'T10'; payload: T4Payload | T10Payload; tags: string[]; source: 'ai' | 'user'; createdAt: number };
 export type WordlistEntry = { lemmaId: string; glossJa?: string };
 export type WordlistRow = { id?: number; name: string; priority: number; active: boolean; entries: WordlistEntry[] };
 export type UnitStateRow = { unitId: string; unlocked: boolean; noteSeen?: boolean; noteTitle?: string; noteMd?: string };
 export type TagWeight = { tag: string; w: number };
 export type PlanRow = { id?: number; ts: number; raw: unknown; weights: TagWeight[]; expiresAt: number };
-export type QuarantineRow = { id?: number; ts: number; payload: unknown; reason: string };
+export type QuarantineRow = { id?: number; ts: number; /** Which task produced the item (default 't4'). */ kind?: 't4' | 't10'; payload: unknown; reason: string };
 export type ExplainRow = { key: string; explain: string; ts: number };
 export type BacklogStatus = 'new' | 'exported';
 export type BacklogRow = { id?: number; ts: number; status: BacklogStatus; title: string; rationale: string; spec: string };

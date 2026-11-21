@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AIProvider } from '../src/ai/provider';
 import type { AnalyzeOutput } from '../src/ai/schemas';
-import { backlogMarkdown, importAnalysis, restoreLineBreaks, runAnalyze, runExplain, runGloss, runNote } from '../src/ai/tasks';
+import { backlogMarkdown, importAnalysis, restoreLineBreaks, runAnalyze, runAspectItems, runExplain, runGloss, runNote } from '../src/ai/tasks';
 import { UNITS } from '../src/content/units';
 import { ratingFor } from '../src/core/classify';
 import { grade, isUncertainGloss, type Answer, type Question } from '../src/core/grade';
@@ -13,6 +13,7 @@ import { SCHEMA_VERSION, db, RusloDB, setDb } from '../src/db/db';
 import { toRow } from '../src/db/dict';
 import { loadSettings, setSetting } from '../src/db/settings';
 import { activeWeights, buildQuestion, buildSession, glossCandidates, loadContext, newLemmaQueue, recordAttempt } from '../src/db/study';
+import { newFsrs } from '../src/core/scheduler';
 import { createWordlist, findAmbiguities } from '../src/db/wordlists';
 import { markAllBacklogExported, syncAppVersion } from '../src/db/backlog';
 
@@ -514,5 +515,71 @@ describe('aspect questions (A1-A4)', () => {
       expect(q.options.join('|')).not.toContain('作る');
       expect(q.options[q.correct]).toBe('する〔不完〕');
     }
+  });
+});
+
+
+describe('T10 aspect drill (A5)', () => {
+  const chitat = (): Lemma => ({
+    id: 'v-читать', bare: 'читать', accented: 'чита́ть', pos: 'verb', rank: 30, level: 'A1', aspect: 'impf',
+    partnerIds: ['v-прочитать'], glossEn: ['read'], forms: { 'past.m': f('чита́л'), 'pres.1sg': f('чита́ю') },
+  });
+  const prochitat = (): Lemma => ({
+    id: 'v-прочитать', bare: 'прочитать', accented: 'прочита́ть', pos: 'verb', rank: 31, level: 'A1', aspect: 'pf',
+    partnerIds: ['v-читать'], glossEn: ['read'], forms: { 'past.m': f('прочита́л'), 'pres.1sg': f('прочита́ю') },
+  });
+
+  async function seedLearnedPair(): Promise<number> {
+    const now = Date.now();
+    await db.lemmas.bulkPut([toRow(chitat()), toRow(prochitat())]);
+    await db.cards.bulkAdd([
+      { id: 'T1:v-читать', type: 'T1', lemmaId: 'v-читать', tags: ['vocab'], createdAt: now, ...newFsrs(now) },
+      { id: 'T1:v-прочитать', type: 'T1', lemmaId: 'v-прочитать', tags: ['vocab'], createdAt: now, ...newFsrs(now) },
+    ]);
+    return now;
+  }
+
+  it('generates T10 items from learned pairs, quarantines invalid ones with kind t10', async () => {
+    await seedLearnedPair();
+    const provider: AIProvider = {
+      run: async <T>() => ({
+        items: [
+          { sentence_ru: 'Вчера я ___ всю книгу.', impf: 'читать', pf: 'прочитать', correct: 'pf', feat: 'past.m', answer: 'прочитал', translation_ja: '昨日私は本を全部読んだ。', cue_ja: 'вчера＋結果' },
+          { sentence_ru: 'Я ___ книгу.', impf: 'читать', pf: 'прочитать', correct: 'impf', feat: 'past.m', answer: 'прочитал', translation_ja: 'x', cue_ja: 'y' },
+          { sentence_ru: 'Я ___ книгу.', impf: 'спать', pf: 'прочитать', correct: 'impf', feat: 'past.m', answer: 'спал', translation_ja: 'x', cue_ja: 'y' },
+        ],
+      }) as T,
+    };
+    const r = await runAspectItems(provider, await loadContext(Date.now()));
+    expect(r).toEqual({ added: 1, quarantined: 2, pairs: 1 });
+    const items = await db.items.toArray();
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ id: 'T10:1', type: 'T10', tags: ['verb.aspect.choice'] });
+    const payload = items[0]!.payload as { sentence_ru: string; impf: string; pf: string; cue_ja: string };
+    expect(payload).toMatchObject({ sentence_ru: 'Вчера я ___ всю книгу.', impf: 'читать', pf: 'прочитать', cue_ja: 'вчера＋結果' });
+    expect((await db.quarantine.toArray()).map((q) => q.kind)).toEqual(['t10', 't10']);
+  });
+
+  it('schedules T10 in the weak slot once U14 is unlocked and grades aspect confusion', async () => {
+    const now = await seedLearnedPair();
+    const provider: AIProvider = {
+      run: async <T>() => ({
+        items: [{ sentence_ru: 'Вчера я ___ всю книгу.', impf: 'читать', pf: 'прочитать', correct: 'pf', feat: 'past.m', answer: 'прочитал', translation_ja: '昨日私は本を全部読んだ。', cue_ja: 'вчера＋結果' }],
+      }) as T,
+    };
+    await runAspectItems(provider, await loadContext(now));
+    await db.unitState.put({ unitId: 'U14', unlocked: true });
+
+    let q: Question | undefined;
+    for (let seed = 1; seed <= 40 && !q; seed++) {
+      q = (await buildSession(await loadContext(now), { ttsAvailable: false, rng: rngFrom(seed) })).find((x) => x.type === 'T10');
+    }
+    if (q?.type !== 'T10') throw new Error('expected T10');
+    expect(q).toMatchObject({ impf: 'читать', pf: 'прочитать', cue: 'вчера＋結果' });
+    expect(q.partners?.map((p) => p.id)).toEqual(['v-читать']);
+    expect(grade(q, { kind: 'text', text: 'прочитал' }, { yoLenient: true }).class).toBe('correct');
+    const g = grade(q, { kind: 'text', text: 'читал' }, { yoLenient: true });
+    expect(g).toMatchObject({ class: 'wrong_aspect', confusion: { expected: 'pf', given: 'impf' } });
+    expect(g.tags).toEqual(expect.arrayContaining(['verb.aspect.choice', 'verb.aspect.pair']));
   });
 });
