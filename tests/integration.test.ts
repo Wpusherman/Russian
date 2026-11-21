@@ -173,6 +173,16 @@ describe('word lists (M4)', () => {
     expect((await db.lemmas.get('u-сесть_на'))?.hint).toBe('+対+前');
     expect((await loadSettings()).hints['v-держать']).toBe('+対+前');
   });
+  it('transliterates Latin headwords and converts accents in user words (W1/W2)', async () => {
+    const r = await createWordlist('ローマ字', "kniga\t本\nprivet\nya/hochu\nсказа'ть\t言う");
+    expect(r.matched).toBe(1); // kniga -> книга
+    expect((await db.lemmas.get('n-книга'))?.glossJa).toBe('本');
+    expect(await db.lemmas.get('u-привет')).toMatchObject({ bare: 'привет', accented: 'привет', user: true });
+    expect(await db.lemmas.get('u-яхочу')).toMatchObject({ bare: 'яхочу', user: true }); // "/" disappears
+    const accented = await db.lemmas.get('u-сказать');
+    expect(accented?.bare).toBe('сказать');
+    expect(accented?.accented).toBe('сказа\u0301ть');
+  });
 });
 
 describe('AI import (M5)', () => {

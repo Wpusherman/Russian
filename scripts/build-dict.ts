@@ -6,7 +6,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { convertAccent } from '../src/core/accent';
 import type { Form, Lemma } from '../src/core/types';
+
+export { convertAccent };
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RAW = join(ROOT, 'data', 'raw');
@@ -50,20 +53,6 @@ const COLUMN_MAP = {
   },
   others: { file: 'others.csv' },
 };
-
-const VOWELS = 'аеиоуыэюяАЕИОУЫЭЮЯ';
-
-/** "челове'к" -> "челове\u0301к". No accent mark on ё; stray apostrophes are dropped. */
-export function convertAccent(s: string): string {
-  let out = '';
-  for (const ch of s.normalize('NFC')) {
-    if (ch === "'" || ch === '\u0301') {
-      const prev = out[out.length - 1];
-      if (prev && VOWELS.includes(prev)) out += '\u0301';
-    } else out += ch;
-  }
-  return out;
-}
 
 /** Split a cell into cleaned forms (primary first). */
 export function splitForms(cell: string): Form | null {

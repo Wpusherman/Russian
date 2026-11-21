@@ -1,7 +1,16 @@
+import { convertAccent } from '../core/accent';
+import { translit } from '../core/translit';
 import { mergeGloss, mergeHints, parseWordlistText } from '../core/wordlist';
 import { db, type LemmaRow, type WordlistEntry, type WordlistRow } from './db';
 import { findLemmas, lemmaKey } from './dict';
 import { loadSettings, setSetting } from './settings';
+
+const CYRILLIC = /[а-яёА-ЯЁ]/;
+
+/** Latin-only headwords are transliterated with the same table as the dictionary search. */
+export function normalizeHeadword(word: string): string {
+  return CYRILLIC.test(word) ? word : translit(word);
+}
 
 /**
  * Store Japanese glosses on the lemmas and in settings (so they survive dictionary rebuilds).
@@ -55,14 +64,16 @@ export async function createWordlist(name: string, text: string): Promise<Import
   const newUser: LemmaRow[] = [];
   let matched = 0;
   for (const line of lines) {
-    const hits = await findLemmas(line.word);
+    const word = normalizeHeadword(line.word);
+    const hits = await findLemmas(word);
     let lemma = hits[0]; // lowest rank
     if (lemma && !lemma.user) matched++;
     if (!lemma) {
       // Words missing from the dictionary (incl. whole phrases / idioms) become user lemmas: T1/T2 only.
-      const bare = line.word.replace(/\u0301/g, '').trim();
+      const accented = convertAccent(word.trim());
+      const bare = accented.replace(/\u0301/g, '').trim();
       lemma = {
-        id: `u-${bare.replace(/[:\s]/g, '_')}`, bare, accented: line.word.trim(), pos: 'other', rank: null, level: null,
+        id: `u-${bare.replace(/[:\s]/g, '_')}`, bare, accented, pos: 'other', rank: null, level: null,
         glossEn: [], forms: {}, key: lemmaKey(bare), user: true,
       };
       if (line.glossJa) lemma.glossJa = line.glossJa;
