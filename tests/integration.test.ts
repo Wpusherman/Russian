@@ -166,6 +166,12 @@ describe('word lists (M4)', () => {
     const phq = await buildQuestion({ itemId: 'T1:u-сесть_на', type: 'T1', lemmaId: 'u-сесть_на', slot: 'new' });
     expect(phq?.type === 'T1' && phq.hint).toBe('+対');
     expect(phq?.type === 'T1' && phq.options[phq.correct]).toBe('乗る');
+
+    // A second annotation for the same lemma is appended, not overwritten.
+    await createWordlist('フレーズ2', 'держать +前\nсесть на +前');
+    expect((await db.lemmas.get('v-держать'))?.hint).toBe('+対+前');
+    expect((await db.lemmas.get('u-сесть_на'))?.hint).toBe('+対+前');
+    expect((await loadSettings()).hints['v-держать']).toBe('+対+前');
   });
 });
 

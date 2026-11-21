@@ -2,7 +2,7 @@ export type WordlistLine = { word: string; glossJa?: string; hint?: string };
 
 /** Grammar-case annotations accepted in the headword, e.g. "сесть on +対".
  *  属 / 具 are aliases and are normalised to the internal case names 生 / 造 (1-to-1 mapping). */
-const HINT_RE = /(?:^|\s)\+([主生属与対造具前複])(?=\s|$)/g;
+const HINT_RE = /(?:^|(?<=[\sа-яёА-ЯЁ)\]主生属与対造具前複]))\s*\+([主生属与対造具前複])(?=\s|$|\+)/gu;
 const HINT_ALIASES: Record<string, string> = { 属: '生', 具: '造' };
 
 function splitHint(word: string): { word: string; hint?: string } {
@@ -23,6 +23,12 @@ function parseParts(s: string): string[] {
     .split(/(?:、|，)|(?<=^|\s)\d{1,2}\.\s+/u)
     .map((p) => p.trim())
     .filter(Boolean);
+}
+
+/** Merge two annotation strings ("+対" + "+前" -> "+対+前"), keeping the first occurrence order. */
+export function mergeHints(existing: string, next: string): string {
+  const tokens = (h: string) => h.match(/\+[主生属与対造具前複]/g) ?? [];
+  return [...new Set([...tokens(existing), ...tokens(next)])].join('');
 }
 
 /**

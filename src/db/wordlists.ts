@@ -1,4 +1,4 @@
-import { mergeGloss, parseWordlistText } from '../core/wordlist';
+import { mergeGloss, mergeHints, parseWordlistText } from '../core/wordlist';
 import { db, type LemmaRow, type WordlistEntry, type WordlistRow } from './db';
 import { findLemmas, lemmaKey } from './dict';
 import { loadSettings, setSetting } from './settings';
@@ -30,10 +30,18 @@ export async function saveHints(hints: Record<string, string>): Promise<number> 
   const ids = Object.keys(hints);
   if (ids.length === 0) return 0;
   const s = await loadSettings();
-  await setSetting('hints', { ...s.hints, ...hints });
+  const merged = { ...s.hints };
   const rows = await db.lemmas.bulkGet(ids);
-  await db.lemmas.bulkPut(rows.filter((r): r is LemmaRow => !!r).map((r) => ({ ...r, hint: hints[r.id]! })));
-  return ids.length;
+  const updates: LemmaRow[] = [];
+  for (const r of rows) {
+    if (!r) continue;
+    const next = mergeHints(merged[r.id] ?? r.hint ?? '', hints[r.id]!);
+    merged[r.id] = next;
+    updates.push({ ...r, hint: next });
+  }
+  await setSetting('hints', merged);
+  if (updates.length > 0) await db.lemmas.bulkPut(updates);
+  return updates.length;
 }
 
 export type ImportSummary = { matched: number; created: number; total: number };

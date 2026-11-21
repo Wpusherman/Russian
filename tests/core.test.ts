@@ -273,6 +273,13 @@ describe('wordlist gloss merge', () => {
     expect(parseWordlistText('играть в +対 +前\t…について遊ぶ')).toEqual([
       { word: 'играть в', hint: '+対+前', glossJa: '…について遊ぶ' },
     ]);
+    // The annotation is recognised without a space too (Cyrillic / ")" / "]" right before "+").
+    expect(parseWordlistText('сесть на+対\t乗る')).toEqual([{ word: 'сесть на', hint: '+対', glossJa: '乗る' }]);
+    expect(parseWordlistText('просить+対,頼む')).toEqual([{ word: 'просить', hint: '+対', glossJa: '頼む' }]);
+    expect(parseWordlistText('держать)+対')).toEqual([{ word: 'держать)', hint: '+対' }]);
+    expect(parseWordlistText('x]+複')).toEqual([{ word: 'x]', hint: '+複' }]);
+    expect(parseWordlistText('играть +対+前')).toEqual([{ word: 'играть', hint: '+対+前' }]);
+    expect(parseWordlistText('c++')).toEqual([{ word: 'c++' }]); // not a Japanese case annotation
     expect(parseWordlistText('играть')).toEqual([{ word: 'играть' }]);
     expect(parseWordlistText('+対\tonly')).toEqual([]); // an annotation alone is not a word
   });
