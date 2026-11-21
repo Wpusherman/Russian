@@ -6,6 +6,8 @@ export const AI_TASKS: AITask[] = ['analyze', 'gloss', 'explain', 'note', 'grade
 
 export type Settings = {
   dictVersion: string;
+  /** App version recorded at the last startup; a change triggers the backlog cleanup. */
+  appVersion: string;
   sessionSize: number;
   dailyNewLimit: number;
   yoLenient: boolean;
@@ -37,6 +39,7 @@ export const DEFAULT_MODELS: Record<AITask, string> = {
 
 export const DEFAULTS: Settings = {
   dictVersion: '',
+  appVersion: '',
   sessionSize: 20,
   dailyNewLimit: 15,
   yoLenient: true,

@@ -3,6 +3,7 @@ import { GeminiProvider } from '../ai/gemini';
 import { ManualProvider, type ManualRequest } from '../ai/manual';
 import type { AIProvider } from '../ai/provider';
 import { aiCallsToday, countAiCall } from '../ai/tasks';
+import { syncAppVersion } from '../db/backlog';
 import { ensureDict, type DictProgress } from '../db/dict';
 import { getApiKey, loadSettings } from '../db/settings';
 import { AI_EVENT, AiContext, navigate, useHashRoute } from './common';
@@ -73,6 +74,7 @@ export function App(): ReactNode {
   const [ready, setReady] = useState(false);
   const [manual, setManual] = useState<ManualState | null>(null);
   const [aiCount, setAiCount] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -82,6 +84,21 @@ export function App(): ReactNode {
     );
     return () => { alive = false; };
   }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    let alive = true;
+    void syncAppVersion(__APP_VERSION__).then((n) => {
+      if (alive && n > 0) setToast(`更新を検出: エクスポート済みのバックログ ${n} 件を削除しました`);
+    });
+    return () => { alive = false; };
+  }, [ready]);
+
+  useEffect(() => {
+    if (toast === null) return;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     const refresh = () => void aiCallsToday().then(setAiCount);
@@ -151,6 +168,7 @@ export function App(): ReactNode {
       </header>
       <main>{body}</main>
       {manual && <ManualDialog key={manual.req.prompt} state={manual} />}
+      {toast && <div className="toast" role="status">{toast}</div>}
     </AiContext.Provider>
   );
 }

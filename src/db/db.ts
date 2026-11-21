@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import type { FsrsFields } from '../core/scheduler';
 import type { Attempt, FeatKey, ItemType, Lemma } from '../core/types';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** `key` = normalize(bare) (lowercase, ё folded) for lookups; `user` marks word-list words missing from the dictionary. */
 export type LemmaRow = Lemma & { key: string; user?: boolean };
@@ -18,7 +18,8 @@ export type TagWeight = { tag: string; w: number };
 export type PlanRow = { id?: number; ts: number; raw: unknown; weights: TagWeight[]; expiresAt: number };
 export type QuarantineRow = { id?: number; ts: number; payload: unknown; reason: string };
 export type ExplainRow = { key: string; explain: string; ts: number };
-export type BacklogRow = { id?: number; ts: number; title: string; rationale: string; spec: string };
+export type BacklogStatus = 'new' | 'exported';
+export type BacklogRow = { id?: number; ts: number; status: BacklogStatus; title: string; rationale: string; spec: string };
 export type AiUsageRow = { ptDate: string; count: number };
 export type SettingRow = { key: string; value: unknown };
 
@@ -38,7 +39,7 @@ export class RusloDB extends Dexie {
 
   constructor(name = 'ruslo') {
     super(name);
-    this.version(SCHEMA_VERSION).stores({
+    this.version(1).stores({
       lemmas: 'id, key, rank, pos, level, [pos+rank]',
       cards: 'id, type, lemmaId, *tags, due, state',
       items: 'id, type, *tags, source, createdAt',
@@ -52,6 +53,10 @@ export class RusloDB extends Dexie {
       aiUsage: 'ptDate',
       settings: 'key',
     });
+    // v2: backlog status ('new' | 'exported') for the version-driven cleanup.
+    this.version(2).stores({ backlog: '++id, ts, status' }).upgrade((tx) => tx.table('backlog').toCollection().modify((r: BacklogRow) => {
+      r.status ??= 'new';
+    }));
   }
 }
 

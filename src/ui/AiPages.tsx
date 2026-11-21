@@ -5,6 +5,7 @@ import { tagLabelJa } from '../core/tags';
 import { db, type QuarantineRow } from '../db/db';
 import { loadSettings } from '../db/settings';
 import { downloadText, fmtDate, useAsync } from './common';
+import { markAllBacklogExported } from '../db/backlog';
 
 // ---------- AI reports ----------
 
@@ -127,32 +128,46 @@ export function BacklogPage(): ReactNode {
   const { data, reload } = useAsync(() => db.backlog.orderBy('id').toArray(), []);
   const [copied, setCopied] = useState(false);
   const rows = data ?? [];
+  const fresh = rows.filter((r) => (r.status ?? 'new') === 'new');
+  const exported = rows.filter((r) => r.status === 'exported');
   const md = backlogMarkdown(rows);
+  const exportAll = async () => {
+    await markAllBacklogExported();
+    reload();
+  };
   const copy = async () => {
     await navigator.clipboard.writeText(md);
+    await exportAll();
     setCopied(true);
+  };
+  const download = async () => {
+    downloadText('FEATURE_BACKLOG.md', md, 'text/markdown');
+    await exportAll();
   };
   const remove = async (id: number) => {
     await db.backlog.delete(id);
     reload();
   };
+  const card = (r: (typeof rows)[number]) => (
+    <section className="card" key={r.id}>
+      <div className="row between"><h2>{r.title}</h2><span className="muted small-text">{fmtDate(r.ts)}</span></div>
+      <p><b>根拠：</b>{r.rationale}</p>
+      <p><b>仕様：</b>{r.spec}</p>
+      <button className="small ghost" onClick={() => void remove(r.id!)}>削除</button>
+    </section>
+  );
   return (
     <div>
       <h1>バックログ（AIからの機能提案）</h1>
+      <p className="muted">コピーまたはダウンロードした項目は「エクスポート済み」になります。アプリの版が変わると、エクスポート済みの項目は自動で削除されます。</p>
       <div className="row">
         <button disabled={rows.length === 0} onClick={() => void copy()}>全件コピー</button>
-        <button disabled={rows.length === 0} onClick={() => downloadText('FEATURE_BACKLOG.md', md, 'text/markdown')}>.mdとしてダウンロード</button>
+        <button disabled={rows.length === 0} onClick={() => void download()}>.mdとしてダウンロード</button>
         {copied && <span className="ok-text">コピーしました</span>}
       </div>
       {rows.length === 0 && <p className="muted">まだ提案はありません。分析を実行すると、AIが必要と判断した機能がここに追加されます。</p>}
-      {rows.map((r) => (
-        <section className="card" key={r.id}>
-          <div className="row between"><h2>{r.title}</h2><span className="muted small-text">{fmtDate(r.ts)}</span></div>
-          <p><b>根拠：</b>{r.rationale}</p>
-          <p><b>仕様：</b>{r.spec}</p>
-          <button className="small ghost" onClick={() => void remove(r.id!)}>削除</button>
-        </section>
-      ))}
+      {fresh.length > 0 && <><h2>未エクスポート（{fresh.length}件）</h2>{fresh.map(card)}</>}
+      {exported.length > 0 && <><h2 className="muted">エクスポート済み（{exported.length}件）</h2>{exported.map(card)}</>}
     </div>
   );
 }

@@ -74,7 +74,7 @@ export async function importAnalysis(out: AnalyzeOutput, ctx: Pick<StudyContext,
     }
   }
   if (out.feature_requests.length > 0) {
-    await db.backlog.bulkAdd(out.feature_requests.map((f) => ({ ts: now, title: f.title, rationale: f.rationale, spec: f.spec })));
+    await db.backlog.bulkAdd(out.feature_requests.map((f) => ({ ts: now, status: 'new' as const, title: f.title, rationale: f.rationale, spec: f.spec })));
   }
   await setSetting('lastAnalysisAt', now);
   await setSetting('lastAnalyzedAttemptId', ctx.attempts.reduce((m, a) => Math.max(m, a.id ?? 0), 0));

@@ -9,11 +9,12 @@ import { grade, isUncertainGloss, type Answer, type Question } from '../src/core
 import { DAY_MS } from '../src/core/stats';
 import type { Form, Lemma } from '../src/core/types';
 import { exportAll, importAll, parseBackup } from '../src/db/backup';
-import { db, RusloDB, setDb } from '../src/db/db';
+import { SCHEMA_VERSION, db, RusloDB, setDb } from '../src/db/db';
 import { toRow } from '../src/db/dict';
 import { loadSettings, setSetting } from '../src/db/settings';
 import { activeWeights, buildQuestion, buildSession, glossCandidates, loadContext, newLemmaQueue, recordAttempt } from '../src/db/study';
 import { createWordlist } from '../src/db/wordlists';
+import { markAllBacklogExported, syncAppVersion } from '../src/db/backlog';
 
 const f = (primary: string): Form => ({ primary, variants: [] });
 const STEMS = ['крыш', 'душ', 'туч', 'книг', 'ламп', 'карт', 'школ', 'комнат', 'машин', 'газет', 'рыб', 'групп', 'стран', 'минут', 'цен', 'побед', 'планет', 'систем'];
@@ -303,7 +304,7 @@ describe('T4 / T6 flow and export / import (M6)', () => {
     // export -> wipe -> import restores everything except lemmas
     await createWordlist('list', 'рыба\tさかな');
     const backup = parseBackup(JSON.stringify(await exportAll()));
-    expect(backup.schemaVersion).toBe(1);
+    expect(backup.schemaVersion).toBe(SCHEMA_VERSION);
     expect(backup.tables['lemmas']).toBeUndefined();
     const before = { attempts: await db.attempts.count(), cards: await db.cards.count(), items: await db.items.count() };
     await playSession(later, 9);
@@ -366,5 +367,32 @@ describe('AI gloss (G1)', () => {
     expect((await db.lemmas.get('n-книга'))?.glossJa).toBe('本?');
     expect(isUncertainGloss((await db.lemmas.get('n-книга'))!.glossJa!)).toBe(true);
     expect((await loadSettings()).glossJa['n-книга']).toBe('本?');
+  });
+});
+
+
+describe('backlog lifecycle (P1)', () => {
+  const withRequests = (titles: string[]): AnalyzeOutput => ({
+    diagnosis: [], tag_weights: [], tips_ja: '', new_items: [],
+    feature_requests: titles.map((title) => ({ title, rationale: '根拠', spec: '仕様' })),
+  });
+
+  it('imports proposals as new, exports them, and deletes only exported rows on a version change', async () => {
+    const now = Date.now();
+    const ctx = await loadContext(now);
+    await importAnalysis(withRequests(['A', 'B']), ctx, now);
+    expect((await db.backlog.toArray()).map((r) => r.status)).toEqual(['new', 'new']);
+
+    await markAllBacklogExported();
+    expect((await db.backlog.toArray()).every((r) => r.status === 'exported')).toBe(true);
+    await db.backlog.add({ ts: now + 1, status: 'new', title: 'keep', rationale: 'r', spec: 's' });
+    await setSetting('appVersion', '1.0.1');
+
+    expect(await syncAppVersion('1.0.2')).toBe(2);
+    expect((await db.backlog.toArray()).map((r) => r.title)).toEqual(['keep']);
+    expect((await loadSettings()).appVersion).toBe('1.0.2');
+
+    expect(await syncAppVersion('1.0.2')).toBe(0); // same version: nothing happens
+    expect(await db.backlog.count()).toBe(1);
   });
 });
