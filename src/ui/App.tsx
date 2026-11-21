@@ -16,12 +16,13 @@ import { SettingsPage } from './SettingsPage';
 import { StatsPage } from './StatsPage';
 import { TranslationPage } from './TranslationPage';
 import { ReadingPage } from './ReadingPage';
+import { TadokuPage } from './TadokuPage';
 import { UnitsPage } from './UnitsPage';
 import { WordlistsPage } from './WordlistsPage';
 
 const NAV: [string, string][] = [
   ['home', 'ホーム'], ['stats', '統計'], ['units', '単元'], ['wordlists', '単語リスト'], ['dict', '辞書'],
-  ['translation', '和文露訳'], ['reading', '音読'],
+  ['translation', '和文露訳'], ['reading', '音読'], ['tadoku', '多読'],
   ['reports', 'AIレポート'], ['quarantine', '検疫'], ['backlog', 'バックログ'], ['settings', '設定'],
 ];
 
@@ -160,6 +161,7 @@ export function App(): ReactNode {
     case 'dict': body = <DictPage />; break;
     case 'translation': body = <TranslationPage />; break;
     case 'reading': body = <ReadingPage />; break;
+    case 'tadoku': body = <TadokuPage />; break;
     case 'reports': body = <ReportsPage />; break;
     case 'quarantine': body = <QuarantinePage />; break;
     case 'backlog': body = <BacklogPage />; break;

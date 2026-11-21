@@ -206,3 +206,11 @@ table { border-collapse: collapse; }
 .box.warn { border-color: var(--accent, #a70); background: rgba(170, 120, 0, 0.12); }
 
 .spell-bad { text-decoration: underline wavy #e5484d; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+
+.tadoku-text { white-space: pre-wrap; font-size: 1.15rem; line-height: 2.1; }
+.tadoku-text .word {
+  display: inline; background: none; border: none; border-bottom: 1px dotted var(--border);
+  border-radius: 0; padding: 0 1px; color: inherit; font: inherit;
+}
+.tadoku-text .word:hover:not(:disabled) { background: var(--key); border-bottom-color: var(--accent); }
+.tadoku-text .word.on { background: var(--hot); border-bottom: 1px solid var(--accent); }

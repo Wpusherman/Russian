@@ -17,6 +17,7 @@ import { activeWeights, buildQuestion, buildSession, glossCandidates, loadContex
 import { newFsrs } from '../src/core/scheduler';
 import { createWordlist, dedupeStoredGlosses, findAmbiguities, saveGlosses } from '../src/db/wordlists';
 import { markAllBacklogExported, syncAppVersion } from '../src/db/backlog';
+import { addToReadingList, lookupWord, READING_LIST_NAME } from '../src/db/tadoku';
 
 const f = (primary: string): Form => ({ primary, variants: [] });
 const STEMS = ['крыш', 'душ', 'туч', 'книг', 'ламп', 'карт', 'школ', 'комнат', 'машин', 'газет', 'рыб', 'групп', 'стран', 'минут', 'цен', 'побед', 'планет', 'систем'];
@@ -737,5 +738,28 @@ describe('T7 translation attempts', () => {
     const a = await recordT7Attempt({ itemId: 'T4:1', ja: '私はモスクワに住んでいます。', given: 'Я живу в Москве.', score: 0.5, corrected: 'Я живу в Москве.', now: 123 });
     expect(a).toMatchObject({ itemId: 'T7:T4:1', type: 'T7', score: 0.5, class: 'wrong', tags: [], prompt: '私はモスクワに住んでいます。' });
     expect(await db.attempts.get(a.id!)).toEqual(a);
+  });
+});
+
+
+describe('tadoku lookup (M7)', () => {
+  it('resolves headwords, inflected forms and unknown words', async () => {
+    const exact = await lookupWord('книга');
+    expect(exact.hits[0]).toMatchObject({ via: 'headword' });
+    expect(exact.hits[0]!.lemma.id).toBe('n-книга');
+
+    const inflected = await lookupWord('книге');
+    expect(inflected.hits[0]).toMatchObject({ via: 'form' });
+    expect(inflected.hits[0]!.lemma.id).toBe('n-книга');
+
+    expect((await lookupWord('ъъъ')).hits).toEqual([]);
+  });
+
+  it('creates the 多読 list on first add and does not duplicate the same lemma', async () => {
+    expect(await addToReadingList('n-книга')).toBe('added');
+    expect(await addToReadingList('n-книга')).toBe('exists');
+    const lists = await db.wordlists.toArray();
+    expect(lists).toHaveLength(1);
+    expect(lists[0]).toMatchObject({ name: READING_LIST_NAME, active: true, entries: [{ lemmaId: 'n-книга' }] });
   });
 });

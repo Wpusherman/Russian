@@ -30,9 +30,9 @@ P運用・W単語リスト・A体・B活用・M7任意・C作文。
 | B3 | 正書法規則のハイライト（spellExceptions） | build-dict |
 | B4 | T9 形容詞一致ドリル・タグ別の集中練習 | 集中練習は汎用 |
 | B5 | アクセント入力（`=`）と stressOk 記録 | なし |
-| M7 | T7 和文露訳（grade_t7 のみ既存） | なし |
-| M7 | T8 音読（webkitSpeechRecognition） | 発音 UI |
-| M7 | 多読モード | 辞書検索・単語登録 |
+| M7 | T7 和文露訳 | 実装済み（`#/translation`） |
+| M7 | T8 音読 | 実装済み（`#/reading`） |
+| M7 | 多読モード | 実装済み（`#/tadoku`） |
 | C | 作文機能（逆引き表・自由穴埋め・AI 添削） | 逆引き表、W6、A5 |
 
 推奨順: **P1→P2→P3 → W6→W7→W1→W2→W5→W3→W4 → build-dict 一括（both/alt/spellExceptions）→ A1→A2→A3→A4→A5 → B1→B2→B3→B4→B5 → W8→W9 → M7 → C**。
