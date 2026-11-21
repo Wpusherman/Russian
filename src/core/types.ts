@@ -14,8 +14,12 @@ export type Lemma = {
   rank: number | null;
   level: string | null;
   gender?: 'm' | 'f' | 'n' | 'pl';
+  /** True when `gender` was derived from the ending (never used for the noun.gender drill). */
+  genderInferred?: boolean;
   animate?: boolean;
-  aspect?: 'impf' | 'pf';
+  aspect?: 'impf' | 'pf' | 'both';
+  /** Consonant alternation between the infinitive stem and the pres.1sg stem (verbs only). */
+  alt?: { from: string; to: string; scope: 'all' | '1sg' };
   partnerIds?: string[];
   glossEn: string[];
   glossJa?: string;
@@ -24,7 +28,7 @@ export type Lemma = {
   forms: Record<FeatKey, Form>;
 };
 
-export type ItemType = 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6';
+export type ItemType = 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6' | 'T11';
 export type AnswerClass = 'correct' | 'orthographic' | 'wrong_form' | 'spelling_rule' | 'typo' | 'wrong';
 export type Confusion = { expected: FeatKey; given: FeatKey };
 /** FSRS rating: 1 Again, 2 Hard, 3 Good, 4 Easy */

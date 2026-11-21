@@ -7,7 +7,7 @@ import { expandTagPattern, tagsForFeat, verbConjType, confusionLabelJa } from '.
 import { TRANSLIT_TABLE, translit, translitLive } from '../src/core/translit';
 import { mergeGloss, parseWordlistText } from '../src/core/wordlist';
 import type { Attempt, Form, Lemma } from '../src/core/types';
-import { convertAccent, splitForms } from '../scripts/build-dict';
+import { alternationFor, convertAccent, inferGender, splitForms, spellExceptionForms } from '../scripts/build-dict';
 
 const form = (primary: string, ...variants: string[]): Form => ({ primary, variants });
 
@@ -282,6 +282,37 @@ describe('wordlist gloss merge', () => {
     expect(parseWordlistText('c++')).toEqual([{ word: 'c++' }]); // not a Japanese case annotation
     expect(parseWordlistText('играть')).toEqual([{ word: 'играть' }]);
     expect(parseWordlistText('+対\tonly')).toEqual([]); // an annotation alone is not a word
+  });
+});
+
+describe('build-dict derivation', () => {
+  it('infers gender from the nominative ending (ь gives no answer)', () => {
+    expect(inferGender('стол')).toBe('m');
+    expect(inferGender('музей')).toBe('m');
+    expect(inferGender('книга')).toBe('f');
+    expect(inferGender('семья')).toBe('f');
+    expect(inferGender('окно')).toBe('n');
+    expect(inferGender('море')).toBe('n');
+    expect(inferGender('время')).toBe('n'); // -мя
+    expect(inferGender('тетрадь')).toBeUndefined();
+    expect(inferGender('день')).toBeUndefined();
+  });
+  it('computes the infinitive / pres.1sg consonant alternation', () => {
+    const vf = (p1: string, p2: string): Record<string, Form> => ({ 'pres.1sg': form(p1), 'pres.2sg': form(p2) });
+    expect(alternationFor('писать', vf('пишу', 'пишешь'))).toEqual({ from: 'с', to: 'ш', scope: 'all' });
+    expect(alternationFor('спросить', vf('спрошу', 'спросишь'))).toEqual({ from: 'с', to: 'ш', scope: '1sg' });
+    expect(alternationFor('видеть', vf('вижу', 'видишь'))).toEqual({ from: 'д', to: 'ж', scope: '1sg' });
+    expect(alternationFor('показать', vf('покажу', 'покажешь'))).toEqual({ from: 'з', to: 'ж', scope: 'all' });
+    expect(alternationFor('любить', vf('люблю', 'любишь'))).toEqual({ from: 'б', to: 'бл', scope: '1sg' });
+    expect(alternationFor('читать', vf('читаю', 'читаешь'))).toBeUndefined();
+    expect(alternationFor('писать', {})).toBeUndefined();
+  });
+  it('collects forms that violate the spelling rules (exceptions)', () => {
+    const mk = (bare: string, forms: Record<string, Form> = {}): Lemma => ({
+      id: bare, bare, accented: bare, pos: 'other', rank: 1, level: 'A1', glossEn: [], forms,
+    });
+    const out = spellExceptionForms([mk('жюри'), mk('парашют'), mk('книга', { 'case.gen.pl': form('книгы') }), mk('стол')]);
+    expect(out).toEqual(['жюри', 'книгы', 'парашют']);
   });
 });
 

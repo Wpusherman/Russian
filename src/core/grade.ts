@@ -13,7 +13,8 @@ export type QuestionT4 = Base & {
 };
 export type QuestionT5 = Base & { type: 'T5'; lemma: Lemma; gloss: string; word: string; stressed: number[] };
 export type QuestionT6 = Base & { type: 'T6'; sentence: string; translation: string };
-export type Question = QuestionT1 | QuestionT2 | QuestionT3 | QuestionT4 | QuestionT5 | QuestionT6;
+export type QuestionT11 = Base & { type: 'T11'; lemma: Lemma; num: number; expected: Form };
+export type Question = QuestionT1 | QuestionT2 | QuestionT3 | QuestionT4 | QuestionT5 | QuestionT6 | QuestionT11;
 
 export type Answer = { kind: 'choice'; index: number } | { kind: 'text'; text: string } | { kind: 'stress'; index: number };
 
@@ -100,6 +101,11 @@ export function grade(q: Question, a: Answer, opts: { yoLenient: boolean }): Gra
         class: q.stressed.includes(idx) ? 'correct' : 'wrong', tags: q.tags, given: mark(idx),
         expected: q.lemma.accented, prompt: q.word,
       };
+    }
+    case 'T11': {
+      const text = a.kind === 'text' ? a.text : '';
+      const r = classify({ given: text, expected: q.expected, yoLenient: opts.yoLenient });
+      return { class: r.class, tags: q.tags, given: text, expected: q.expected.primary, prompt: `${q.num} ${q.lemma.bare}` };
     }
     case 'T6': {
       const text = a.kind === 'text' ? a.text : '';

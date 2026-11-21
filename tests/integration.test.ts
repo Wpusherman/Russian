@@ -453,3 +453,21 @@ describe('analyze packet backlog titles (P3)', () => {
     expect(packet!.backlog_titles.sort()).toEqual(['新規提案', '書き出し済み']);
   });
 });
+
+describe('T11 numeral drill (N1)', () => {
+  it('offers T11 through the weak slot once U10 is unlocked and grades the noun form', async () => {
+    const now = new Date(2026, 5, 1, 9, 0, 0).getTime();
+    await db.unitState.put({ unitId: 'U10', unlocked: true });
+    let q: Question | undefined;
+    for (let seed = 1; seed <= 30 && !q; seed++) {
+      q = (await buildSession(await loadContext(now), { ttsAvailable: false, rng: rngFrom(seed) })).find((x) => x.type === 'T11');
+    }
+    if (q?.type !== 'T11') throw new Error('expected a T11 item');
+    expect(q.tags).toEqual(['num.gov']);
+    expect(q.itemId).toBe(`T11:${q.lemmaId}:${q.num}`);
+    expect(q.lemma.level === 'A1' || q.lemma.level === 'A2').toBe(true);
+    expect(q.lemma.forms['case.gen.pl']).toBeDefined();
+    expect(grade(q, { kind: 'text', text: q.expected.primary }, { yoLenient: true }).class).toBe('correct');
+    expect(grade(q, { kind: 'text', text: 'ъъъ' }, { yoLenient: true }).class).toBe('wrong');
+  });
+});

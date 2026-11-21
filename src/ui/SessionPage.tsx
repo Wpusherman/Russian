@@ -13,7 +13,7 @@ import { speak, useRuVoices } from './speech';
 
 const RATING_JA: Record<RatingNum, string> = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy' };
 const TYPE_JA: Record<Question['type'], string> = {
-  T1: '意味認識', T2: '綴り想起', T3: '語形ドリル', T4: '穴埋め', T5: 'アクセント', T6: 'ディクテーション',
+  T1: '意味認識', T2: '綴り想起', T3: '語形ドリル', T4: '穴埋め', T5: 'アクセント', T6: 'ディクテーション', T11: '数詞',
 };
 
 type Done = { question: Question; graded: Graded; rating: RatingNum };
@@ -30,6 +30,7 @@ function speechText(q: Question): string {
     case 'T6': return q.sentence;
     case 'T4': return q.sentence.replace('___', q.expected.primary);
     case 'T3': return q.expected.primary;
+    case 'T11': return q.expected.primary;
     default: return q.lemma.accented;
   }
 }
@@ -60,6 +61,14 @@ function Prompt({ q, onSpeak, canSpeak }: { q: Question; onSpeak: () => void; ca
       );
     case 'T5':
       return <div className="prompt"><div className="muted">{q.gloss}</div><p className="muted">アクセントのある母音をクリック（または数字キー）</p></div>;
+    case 'T11':
+      return (
+        <div className="prompt">
+          <div className="ru big-word">{q.num} ___</div>
+          <div className="muted">（{q.lemma.bare}）</div>
+          <div className="target">→ 数に合う名詞の形（1・2 は数詞も含めて）</div>
+        </div>
+      );
     case 'T6':
       return (
         <div className="prompt">

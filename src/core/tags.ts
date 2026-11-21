@@ -66,7 +66,8 @@ const GENDER_ANSWER: Record<string, string> = { m: 'он', f: 'она', n: 'он
 /** The expected answer for a lemma + feat (handles the computed "gender" pseudo feat). */
 export function expectedForm(lemma: Lemma, feat: FeatKey): Form | null {
   if (feat === GENDER_FEAT) {
-    if (lemma.pos !== 'noun' || !lemma.gender) return null;
+    // A gender inferred from the ending is not trustworthy enough to ask "он / она / оно".
+    if (lemma.pos !== 'noun' || !lemma.gender || lemma.genderInferred) return null;
     return { primary: GENDER_ANSWER[lemma.gender]!, variants: [] };
   }
   return lemma.forms[feat] ?? null;
@@ -86,7 +87,7 @@ export function drillFeats(lemma: Lemma): FeatKey[] {
     const f = lemma.forms[k]!;
     return normalize(f.primary) !== bare;
   });
-  if (lemma.pos === 'noun' && lemma.gender) out.push(GENDER_FEAT);
+  if (lemma.pos === 'noun' && lemma.gender && !lemma.genderInferred) out.push(GENDER_FEAT);
   if (lemma.forms[ASPECT_FEAT]) out.push(ASPECT_FEAT);
   return out;
 }

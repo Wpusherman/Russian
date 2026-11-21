@@ -1,9 +1,10 @@
 import { computeUnlocked, currentUnit, unlockedTags, UNITS, type Unit } from '../content/units';
 import { isCorrectClass } from '../core/classify';
 import { fillBlank, glossOf, stressInfo, type Graded, type Question } from '../core/grade';
+import { isNumeralEligible, numeralExpected, T11_NUMBERS } from '../core/numeral';
 import { newFsrs, retrievability, review, STATE_REVIEW } from '../core/scheduler';
 import {
-  buildGenerator, itemIdT1, itemIdT2, parseItemId, planSession, stressable, vocabTags,
+  buildGenerator, itemIdT1, itemIdT2, itemIdT11, parseItemId, planSession, stressable, vocabTags,
   type ExtraItem, type PlannedItem, type SessionCard,
 } from '../core/session';
 import { startOfDay, tagStats, type TagStat } from '../core/stats';
@@ -225,6 +226,12 @@ export async function buildQuestion(p: PlannedItem, rng: () => number = Math.ran
       if (!stressable(lemma)) return null;
       return { ...base, type: 'T5', tags: ['phon.stress'], lemma, gloss, ...stressInfo(lemma.accented) };
     }
+    case 'T11': {
+      const n = Number(feat);
+      const expected = Number.isFinite(n) ? numeralExpected(lemma, n) : null;
+      if (!expected) return null;
+      return { ...base, type: 'T11', tags: ['num.gov'], lemma, num: n, expected };
+    }
   }
 }
 
@@ -255,6 +262,16 @@ export async function buildSession(ctx: StudyContext, opts: { ttsAvailable: bool
     .filter((it) => !hasCard.has(it.id))
     .filter((it) => it.tags.filter((t) => !t.startsWith('spell.')).every((t) => unlockedSet.has(t)))
     .map((it) => ({ item: { itemId: it.id, type: 'T4', lemmaId: it.payload.lemmaId, slot: 'weak' }, tags: it.tags }));
+  // T11 numeral items are generated locally (no AI): a few numbers for a sample of A1-A2 nouns.
+  const [a1nouns, a2nouns] = await Promise.all([
+    db.lemmas.where('level').equals('A1').toArray(), db.lemmas.where('level').equals('A2').toArray(),
+  ]);
+  for (const lemma of shuffle([...a1nouns, ...a2nouns].filter(isNumeralEligible), rng).slice(0, 40)) {
+    const nums = shuffle(T11_NUMBERS.filter((n) => numeralExpected(lemma, n)), rng).slice(0, 3);
+    for (const n of nums) {
+      extra.push({ item: { itemId: itemIdT11(lemma.id, n), type: 'T11', lemmaId: lemma.id, slot: 'weak' }, tags: ['num.gov'] });
+    }
+  }
 
   const plan = planSession({
     now, sessionSize: ctx.settings.sessionSize, cards, shownToday, tagStats: ctx.stats,

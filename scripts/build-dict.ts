@@ -75,6 +75,72 @@ export function levelFromRank(rank: number): string | null {
   return null;
 }
 
+/** Accent-free lower-case form used by the derivation helpers below. */
+function plain(s: string): string {
+  return s.normalize('NFC').replace(/\u0301/g, '').toLowerCase();
+}
+
+const VOWEL_SET = new Set([...'аеиоуыэюя']);
+const CONSONANTS = 'бвгджзйклмнпрстфхцчшщ';
+
+/**
+ * Gender inferred from the nominative-singular ending. -ь gives no answer.
+ * A gender that the source data provides always wins over this (see the nouns block).
+ */
+export function inferGender(bare: string): 'm' | 'f' | 'n' | undefined {
+  const b = plain(bare);
+  if (b.endsWith('мя')) return 'n';
+  if (b.endsWith('ь')) return undefined;
+  const last = b.slice(-1);
+  if (CONSONANTS.includes(last)) return 'm';
+  if (last === 'а' || last === 'я') return 'f';
+  if (last === 'о' || last === 'е' || last === 'ё') return 'n';
+  return undefined;
+}
+
+/** Consonant alternations, longest source first. */
+const ALT_PAIRS: readonly [string, string][] = [
+  ['ст', 'щ'], ['ск', 'щ'], ['д', 'жд'], ['с', 'ш'], ['з', 'ж'], ['т', 'ч'], ['т', 'щ'], ['д', 'ж'],
+  ['к', 'ч'], ['г', 'ж'], ['х', 'ш'], ['б', 'бл'], ['п', 'пл'], ['в', 'вл'], ['ф', 'фл'], ['м', 'мл'],
+];
+
+/**
+ * Alternation between the infinitive stem and the pres.1sg stem (писать -> с/ш).
+ * scope 'all' when the pres.2sg stem ends with the same consonant as the 1sg stem, otherwise '1sg'.
+ */
+export function alternationFor(bare: string, forms: Record<string, Form>): Lemma['alt'] | undefined {
+  const p1 = forms['pres.1sg'];
+  if (!p1) return undefined;
+  let s = plain(bare).replace(/(ся|сь)$/, '').replace(/(ть|ти|чь)$/, '');
+  if (VOWEL_SET.has(s.slice(-1))) s = s.slice(0, -1);
+  const t = plain(p1.primary).replace(/(ся|сь)$/, '').replace(/[ую]$/, '');
+  for (const [from, to] of ALT_PAIRS) {
+    if (!s.endsWith(from) || !t.endsWith(to)) continue;
+    if (s.slice(0, -from.length) !== t.slice(0, -to.length)) continue;
+    const p2 = forms['pres.2sg'];
+    const stem2 = p2 ? plain(p2.primary).replace(/(ся|сь)$/, '').replace(/(ешь|ёшь|ишь)$/, '') : '';
+    return { from, to, scope: stem2.endsWith(to) ? 'all' : '1sg' };
+  }
+  return undefined;
+}
+
+/**
+ * Dictionary forms that contain a spelling-rule violation ([гкхжшщч]ы / [гкхжшщчц][яю]),
+ * i.e. the exceptions (жюри, парашют...) that must not be flagged by the rule check.
+ */
+export function spellExceptionForms(lemmas: Lemma[]): string[] {
+  const re = [/[гкхжшщч]ы/, /[гкхжшщчц][яю]/];
+  const out = new Set<string>();
+  for (const l of lemmas) {
+    const forms = [l.bare, ...Object.entries(l.forms).filter(([k]) => k !== 'aspect' && k !== 'gender').flatMap(([, f]) => [f.primary, ...f.variants])];
+    for (const f of forms) {
+      const n = plain(f);
+      if (re.some((r) => r.test(n))) out.add(n);
+    }
+  }
+  return [...out].sort();
+}
+
 type Table = { header: string[]; rows: string[][] };
 
 function parseLine(line: string, delim: string): string[] {
@@ -171,6 +237,11 @@ function main() {
       const gender = get(N.gender);
       if (get(N.plOnly) === '1') l.gender = 'pl';
       else if (gender === 'm' || gender === 'f' || gender === 'n' || gender === 'pl') l.gender = gender;
+      if (!l.gender && l.pos === 'noun') {
+        // Source data always wins; only fill a missing gender from the ending.
+        const inferred = inferGender(l.bare);
+        if (inferred) { l.gender = inferred; l.genderInferred = true; }
+      }
       const an = get(N.animate);
       if (an === '1') l.animate = true;
       else if (an === '0') l.animate = false;
@@ -190,6 +261,9 @@ function main() {
       const a = get(V.aspect);
       if (a === 'imperfective') l.aspect = 'impf';
       else if (a === 'perfective') l.aspect = 'pf';
+      else if (a === 'both') l.aspect = 'both';
+      const alt = alternationFor(l.bare, l.forms);
+      if (alt) l.alt = alt;
       if (keep(l)) {
         assignId(l);
         verbs.push({ l, partners: get(V.partner).split(/[,;]/).map((s) => s.trim()).filter(Boolean) });
@@ -233,11 +307,14 @@ function main() {
   const json = JSON.stringify(lemmas);
   const hash = createHash('sha256').update(json).digest('hex').slice(0, 16);
   writeFileSync(join(OUT_DIR, 'dict.json'), json);
-  writeFileSync(join(OUT_DIR, 'dict.meta.json'), JSON.stringify({ hash, count: lemmas.length }));
+  const spellExceptions = spellExceptionForms(lemmas);
+  writeFileSync(join(OUT_DIR, 'dict.meta.json'), JSON.stringify({ hash, count: lemmas.length, spellExceptions }));
   const by = (p: string) => lemmas.filter((l) => l.pos === p).length;
   console.log(
     `dict.json: ${lemmas.length} lemmas (noun ${by('noun')}, verb ${by('verb')}, adj ${by('adj')}, other ${by('other')}), ` +
-      `${(Buffer.byteLength(json) / 1e6).toFixed(1)} MB, hash ${hash}`,
+      `${(Buffer.byteLength(json) / 1e6).toFixed(1)} MB, hash ${hash}, ` +
+      `alt ${lemmas.filter((l) => l.alt).length}, inferred gender ${lemmas.filter((l) => l.genderInferred).length}, ` +
+      `spell exceptions ${spellExceptions.length}`,
   );
 }
 

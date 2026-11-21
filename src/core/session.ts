@@ -22,12 +22,13 @@ export function itemIdT1(lemmaId: string): string { return `T1:${lemmaId}`; }
 export function itemIdT2(lemmaId: string): string { return `T2:${lemmaId}`; }
 export function itemIdT3(lemmaId: string, feat: FeatKey): string { return `T3:${lemmaId}:${feat}`; }
 export function itemIdT5(lemmaId: string): string { return `T5:${lemmaId}`; }
+export function itemIdT11(lemmaId: string, num: number): string { return `T11:${lemmaId}:${num}`; }
 
 export function parseItemId(id: string): { type: ItemType; ref: string; feat?: FeatKey } {
   const i = id.indexOf(':');
   const type = id.slice(0, i) as ItemType;
   const rest = id.slice(i + 1);
-  if (type === 'T3') {
+  if (type === 'T3' || type === 'T11') {
     const j = rest.indexOf(':');
     return { type, ref: rest.slice(0, j), feat: rest.slice(j + 1) };
   }

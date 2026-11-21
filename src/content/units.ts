@@ -35,7 +35,8 @@ export const UNLOCK_MIN_LB = 0.75;
 
 /** Tags that only get attempts through AI-made T4 items; they gate unlocking only once n >= 10. */
 export function isContextOnlyTag(tag: string): boolean {
-  return tag.startsWith('prep.') || tag === 'num.gov';
+  // num.gov is now drilled locally by T11, so it gates U10 like any other tag.
+  return tag.startsWith('prep.');
 }
 
 export type TagProgress = { tag: string; n: number; lb: number; ok: boolean };
