@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { classify, damerauLevenshtein, ratingFor } from '../src/core/classify';
-import { isUncertainGloss } from '../src/core/grade';
+import { CLASS_JA, classify, damerauLevenshtein, ratingFor } from '../src/core/classify';
+import { aspectNote, isUncertainGloss } from '../src/core/grade';
 import { normalize } from '../src/core/normalize';
 import { confusionCounts, DAY_MS, tagStats, wilsonLB } from '../src/core/stats';
-import { expandTagPattern, tagsForFeat, verbConjType, confusionLabelJa } from '../src/core/tags';
+import { aspectBadge, expandTagPattern, tagsForFeat, verbConjType, confusionLabelJa } from '../src/core/tags';
 import { TRANSLIT_TABLE, translit, translitLive } from '../src/core/translit';
 import { mergeGloss, parseWordlistText } from '../src/core/wordlist';
 import type { Attempt, Form, Lemma } from '../src/core/types';
@@ -233,6 +233,32 @@ describe('tags', () => {
   });
   it('labels confusions in Japanese', () => {
     expect(confusionLabelJa('case.prep.sg', 'case.acc.sg')).toBe('対格と前置格を取り違え');
+  });
+});
+
+describe('aspect (A1-A4)', () => {
+  const impf: Lemma = { ...govorit, aspect: 'impf', glossJa: '話す', partnerIds: ['v-сделать'] };
+  const pf: Lemma = { ...govorit, id: 'v-сделать', bare: 'сделать', accented: 'сде́лать', aspect: 'pf', glossJa: '話す', forms: { 'past.m': form('сде́лал') } };
+  it('shows a badge per aspect', () => {
+    expect(aspectBadge({ aspect: 'impf' })).toBe('〔不完〕');
+    expect(aspectBadge({ aspect: 'pf' })).toBe('〔完〕');
+    expect(aspectBadge({ aspect: 'both' })).toBe('〔両体〕');
+    expect(aspectBadge({})).toBe('');
+  });
+  it('adds the aspect nuance only when the partner has the same display gloss', () => {
+    expect(aspectNote(impf, [pf])).toBe('（過程・反復）');
+    expect(aspectNote(pf, [impf])).toBe('（1回・完了）');
+    expect(aspectNote(impf, [{ ...pf, glossJa: '作る' }])).toBeNull();
+    expect(aspectNote({ ...impf, aspect: 'both' }, [pf])).toBeNull();
+    expect(aspectNote(impf, [])).toBeNull();
+  });
+  it('classifies the partner verb as wrong_aspect', () => {
+    const t2 = classify({ given: 'сделать', expected: form('говори́ть'), lemma: impf, partners: [pf] });
+    expect(t2).toEqual({ class: 'wrong_aspect', confusion: { expected: 'impf', given: 'pf' }, tag: 'verb.aspect.pair' });
+    const t3 = classify({ given: 'сделал', expected: form('говори́л'), lemma: { ...impf, forms: { 'past.m': form('говори́л') } }, feat: 'past.m', partners: [pf] });
+    expect(t3.class).toBe('wrong_aspect');
+    expect(ratingFor({ class: 'wrong_aspect', type: 'T3', hintUsed: false, latencyMs: 1000 })).toBe(1);
+    expect(CLASS_JA.wrong_aspect).toBe('体の取り違え');
   });
 });
 

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { translit } from '../core/translit';
 import { glossOf, isUncertainGloss } from '../core/grade';
-import { CASE_JA, GENDER_JA, NUM_JA, featLabelJa, verbConjType } from '../core/tags';
+import { CASE_JA, GENDER_JA, NUM_JA, aspectBadge, featLabelJa, verbConjType } from '../core/tags';
 import { ADJ_GENDERS, CASES, IMP_KEYS, NUMBERS, PAST_KEYS, PRES_KEYS, type Form, type Lemma } from '../core/types';
 import type { LemmaRow } from '../db/db';
 import { searchLemmas } from '../db/dict';
@@ -59,7 +59,7 @@ export function LemmaCard({ lemma }: { lemma: LemmaRow }): ReactNode {
     POS_JA[lemma.pos],
     lemma.gender && `性：${GENDER_JA[lemma.gender]}`,
     lemma.animate !== undefined && (lemma.animate ? '活動体' : '不活動体'),
-    lemma.aspect && (lemma.aspect === 'impf' ? '不完了体' : '完了体'),
+    lemma.aspect && `体：${lemma.aspect === 'impf' ? '不完了体' : lemma.aspect === 'pf' ? '完了体' : '両体'}`,
     lemma.pos === 'verb' && `活用：${verbConjType(lemma)}`,
     lemma.level && `レベル ${lemma.level}`,
     lemma.rank !== null && `頻度順位 ${lemma.rank}`,
@@ -68,7 +68,7 @@ export function LemmaCard({ lemma }: { lemma: LemmaRow }): ReactNode {
   return (
     <div className="card">
       <h3 className="ru">{lemma.accented}{lemma.hint && <span className="muted"> {lemma.hint}</span>}</h3>
-      <div className={isUncertainGloss(glossOf(lemma)) ? 'uncertain-gloss' : ''}>{glossOf(lemma) || <span className="muted">（訳語なし）</span>}</div>
+      <div className={isUncertainGloss(glossOf(lemma)) ? 'uncertain-gloss' : ''}>{glossOf(lemma) || <span className="muted">（訳語なし）</span>}{aspectBadge(lemma)}</div>
       {lemma.glossJa && lemma.glossEn.length > 0 && <div className="muted">{lemma.glossEn.slice(0, 4).join(', ')}</div>}
       <div className="muted small-text">{meta.join(' ・ ')}</div>
       <FormsTable lemma={lemma} />
@@ -95,7 +95,7 @@ export function DictPage(): ReactNode {
           {results.map((r) => (
             <li key={r.id}>
               <button className={shown?.id === r.id ? 'link on' : 'link'} onClick={() => setSelected(r)}>
-                <span className="ru">{r.accented}</span> <span className="muted">{POS_JA[r.pos]} ・ {glossOf(r)}</span>
+                <span className="ru">{r.accented}</span> <span className="muted">{POS_JA[r.pos]} ・ {glossOf(r)}{aspectBadge(r)}</span>
               </button>
             </li>
           ))}

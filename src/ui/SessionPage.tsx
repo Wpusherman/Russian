@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { cachedExplain, runExplain } from '../ai/tasks';
 import { CLASS_JA, isCorrectClass, ratingFor } from '../core/classify';
 import { grade, hintText, isUncertainGloss, targetLabel, type Answer, type Graded, type Question } from '../core/grade';
-import { isVowel } from '../core/normalize';
-import { confusionLabelJa } from '../core/tags';
+import { isVowel, normalize } from '../core/normalize';
+import { aspectBadge, confusionLabelJa } from '../core/tags';
 import type { AnswerClass, RatingNum } from '../core/types';
 import type { Settings } from '../db/settings';
 import { buildSession, loadContext, recordAttempt } from '../db/study';
@@ -35,18 +35,31 @@ function speechText(q: Question): string {
   }
 }
 
+function aspectMistake(q: Question, given: string): string | null {
+  if (q.type !== 'T2' && q.type !== 'T3' && q.type !== 'T4') return null;
+  const n = normalize(given);
+  const partner = (q.partners ?? []).find((p) => {
+    if (normalize(p.bare) === n) return true;
+    if (q.type === 'T2') return false;
+    const f = p.forms[q.feat];
+    return !!f && [f.primary, ...f.variants].some((v) => normalize(v) === n);
+  });
+  if (!partner) return null;
+  return `体の取り違え: 正解は${aspectBadge(q.lemma)}${q.lemma.bare}（あなたの解答は${aspectBadge(partner)}${partner.bare}）`;
+}
+
 function Prompt({ q, onSpeak, canSpeak }: { q: Question; onSpeak: () => void; canSpeak: boolean }): ReactNode {
   const speakBtn = canSpeak && <button className="ghost small" tabIndex={-1} onClick={onSpeak} title="P">🔊 <kbd>P</kbd></button>;
   switch (q.type) {
     case 'T1':
       return <div className="prompt"><div className="ru big-word">{q.lemma.accented}{q.hint && <span className="muted"> {q.hint}</span>}</div>{speakBtn}<p className="muted">意味を選んでください（1〜4）</p></div>;
     case 'T2':
-      return <div className="prompt"><div className={isUncertainGloss(q.gloss) ? 'big-word uncertain-gloss' : 'big-word'}>{q.gloss}</div>{q.hint && <div className="muted">{q.hint}</div>}{canSpeak && <button className="ghost small" tabIndex={-1} onClick={onSpeak}>🔊 <kbd>Ctrl+P</kbd></button>}<p className="muted">ロシア語で書いてください</p></div>;
+      return <div className="prompt"><div className={isUncertainGloss(q.gloss) ? 'big-word uncertain-gloss' : 'big-word'}>{q.gloss}{aspectBadge(q.lemma)}</div>{q.note && <div className="muted">{q.note}</div>}{q.hint && <div className="muted">{q.hint}</div>}{canSpeak && <button className="ghost small" tabIndex={-1} onClick={onSpeak}>🔊 <kbd>Ctrl+P</kbd></button>}<p className="muted">ロシア語で書いてください</p></div>;
     case 'T3':
       return (
         <div className="prompt">
           <div className="ru big-word">{q.lemma.accented}</div>
-          <div className={isUncertainGloss(q.gloss) ? 'muted uncertain-gloss' : 'muted'}>{q.gloss}</div>
+          <div className={isUncertainGloss(q.gloss) ? 'muted uncertain-gloss' : 'muted'}>{q.gloss}{aspectBadge(q.lemma)}</div>
           <div className="target">→ {targetLabel(q)}</div>
         </div>
       );
@@ -54,7 +67,7 @@ function Prompt({ q, onSpeak, canSpeak }: { q: Question; onSpeak: () => void; ca
       return (
         <div className="prompt">
           <div className="ru sentence">{q.sentence}</div>
-          <div className="muted">（{q.lemma.bare}）</div>
+          <div className="muted">（{q.lemma.bare}{aspectBadge(q.lemma)}）</div>
           <div>{q.translation}</div>
           <div className="target">→ 空欄に入る形を書いてください</div>
         </div>
@@ -65,7 +78,7 @@ function Prompt({ q, onSpeak, canSpeak }: { q: Question; onSpeak: () => void; ca
       return (
         <div className="prompt">
           <div className="ru big-word">{q.num} ___</div>
-          <div className="muted">（{q.lemma.bare}）</div>
+          <div className="muted">（{q.lemma.bare}{aspectBadge(q.lemma)}）</div>
           <div className="target">→ 数に合う名詞の形（1・2 は数詞も含めて）</div>
         </div>
       );
@@ -206,6 +219,10 @@ function ResultView(props: {
         {props.canSpeak && <button className="ghost small" tabIndex={-1} onClick={props.onSpeak}>🔊 <kbd>P</kbd></button>}
       </div>
       {!ok && q.type !== 'T1' && <div>あなたの解答：<span className="ru">{g.given || '（空欄）'}</span></div>}
+      {g.class === 'wrong_aspect' && <div className="confusion">{aspectMistake(q, g.given)}</div>}
+      {(q.type === 'T2' || q.type === 'T3' || q.type === 'T4') && (q.partners?.length ?? 0) > 0 && (
+        <div className="muted">ペア：{q.partners!.map((p) => `${p.bare}${aspectBadge(p)}`).join(' ↔ ')}</div>
+      )}
       {q.type === 'T6' && <div className="muted">{q.translation}</div>}
       {q.type === 'T4' && <div className="muted">{q.explain}</div>}
       {!ok && (

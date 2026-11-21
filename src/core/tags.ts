@@ -27,7 +27,8 @@ export function prepTag(word: string): string | null {
 
 const FIXED_TAGS = [
   'spell.y_i', 'spell.o_e', 'spell.a_ya', 'phon.stress', 'noun.gender',
-  'verb.pres.conj1', 'verb.pres.conj2', 'verb.pres.irreg', 'verb.past', 'verb.imp', 'verb.aspect', 'verb.motion',
+  'verb.pres.conj1', 'verb.pres.conj2', 'verb.pres.irreg', 'verb.past', 'verb.imp', 'verb.aspect', 'verb.aspect.pair',
+  'verb.aspect.choice', 'verb.motion',
   'num.gov', 'pron.personal', 'pron.possessive', 'vocab',
 ];
 
@@ -143,6 +144,13 @@ export function tagsForFeat(lemma: Lemma, feat: FeatKey): string[] {
 
 // ---------- Japanese labels ----------
 
+export const ASPECT_JA: Record<'impf' | 'pf' | 'both', string> = { impf: '不完', pf: '完', both: '両体' };
+
+/** Badge shown after a verb's translation (A1). */
+export function aspectBadge(lemma: Pick<Lemma, 'aspect'>): string {
+  return lemma.aspect ? `〔${ASPECT_JA[lemma.aspect]}〕` : '';
+}
+
 export const CASE_JA: Record<string, string> = { nom: '主格', gen: '生格', dat: '与格', acc: '対格', ins: '造格', prep: '前置格' };
 export const NUM_JA: Record<string, string> = { sg: '単数', pl: '複数' };
 export const GENDER_JA: Record<string, string> = { m: '男性', f: '女性', n: '中性', pl: '複数' };
@@ -180,7 +188,7 @@ const FIXED_TAG_JA: Record<string, string> = {
   'spell.y_i': '綴り：и / ы の規則', 'spell.o_e': '綴り：о / е の規則', 'spell.a_ya': '綴り：а・у / я・ю の規則',
   'phon.stress': 'アクセント', 'noun.gender': '名詞の性',
   'verb.pres.conj1': '現在形・第1変化', 'verb.pres.conj2': '現在形・第2変化', 'verb.pres.irreg': '現在形・不規則',
-  'verb.past': '過去形', 'verb.imp': '命令形', 'verb.aspect': '体', 'verb.motion': '運動の動詞',
+  'verb.past': '過去形', 'verb.imp': '命令形', 'verb.aspect': '体', 'verb.aspect.pair': '体のペア', 'verb.aspect.choice': '体の選択', 'verb.motion': '運動の動詞',
   'num.gov': '数詞と格', 'pron.personal': '人称代名詞', 'pron.possessive': '所有代名詞', vocab: '語彙',
 };
 

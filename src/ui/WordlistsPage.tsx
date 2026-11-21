@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { db } from '../db/db';
 import { createWordlist, findAmbiguities, listWordlists, moveWordlist, type Ambiguity, type ImportSummary } from '../db/wordlists';
 import { glossOf } from '../core/grade';
+import { aspectBadge } from '../core/tags';
 import { useAsync } from './common';
 
 export function WordlistsPage(): ReactNode {
@@ -104,7 +105,7 @@ export function WordlistsPage(): ReactNode {
                 <span className="ru">{a.word}</span>
                 <select value={choices[a.word]} onChange={(e) => setChoices({ ...choices, [a.word]: e.target.value })}>
                   {a.candidates.map((c) => (
-                    <option key={c.id} value={c.id}>{c.bare}（{glossOf(c) || '訳なし'}）[{c.id}]</option>
+                    <option key={c.id} value={c.id}>{c.bare}（{glossOf(c) || '訳なし'}）{aspectBadge(c)}[{c.id}]</option>
                   ))}
                 </select>
               </label>

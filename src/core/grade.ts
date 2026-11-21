@@ -1,15 +1,15 @@
 import { classify, damerauLevenshtein } from './classify';
-import { normalizeSentence, stripAccent } from './normalize';
+import { normalize, normalizeSentence, stripAccent } from './normalize';
 import { featLabelJa } from './tags';
 import type { AnswerClass, Confusion, FeatKey, Form, Lemma } from './types';
 
 type Base = { itemId: string; lemmaId: string; tags: string[] };
 
 export type QuestionT1 = Base & { type: 'T1'; lemma: Lemma; options: string[]; correct: number; hint?: string };
-export type QuestionT2 = Base & { type: 'T2'; lemma: Lemma; gloss: string; expected: Form; hint?: string };
-export type QuestionT3 = Base & { type: 'T3'; lemma: Lemma; feat: FeatKey; gloss: string; expected: Form };
+export type QuestionT2 = Base & { type: 'T2'; lemma: Lemma; gloss: string; expected: Form; hint?: string; partners?: Lemma[]; note?: string };
+export type QuestionT3 = Base & { type: 'T3'; lemma: Lemma; feat: FeatKey; gloss: string; expected: Form; partners?: Lemma[] };
 export type QuestionT4 = Base & {
-  type: 'T4'; lemma: Lemma; feat: FeatKey; sentence: string; translation: string; explain: string; expected: Form;
+  type: 'T4'; lemma: Lemma; feat: FeatKey; sentence: string; translation: string; explain: string; expected: Form; partners?: Lemma[];
 };
 export type QuestionT5 = Base & { type: 'T5'; lemma: Lemma; gloss: string; word: string; stressed: number[] };
 export type QuestionT6 = Base & { type: 'T6'; sentence: string; translation: string };
@@ -34,6 +34,16 @@ export type Graded = {
 export function glossOf(lemma: Pick<Lemma, 'glossJa' | 'glossEn'>): string {
   if (lemma.glossJa) return lemma.glossJa;
   return lemma.glossEn.slice(0, 2).join(', ');
+}
+
+/** A2: when a verb and its aspect partner share the same display gloss, show the aspect nuance. */
+export function aspectNote(lemma: Pick<Lemma, 'aspect' | 'glossJa' | 'glossEn'>, partners: readonly Lemma[]): string | null {
+  if (!lemma.aspect || lemma.aspect === 'both' || partners.length === 0) return null;
+  const key = (g: string) => normalize(g).replace(/[?？]$/, '');
+  const own = key(glossOf(lemma));
+  if (!own) return null;
+  if (!partners.some((p) => key(glossOf(p)) === own)) return null;
+  return lemma.aspect === 'impf' ? '（過程・反復）' : '（1回・完了）';
 }
 
 /** An AI gloss marked as uncertain by a trailing "?" (shown in a lighter colour). */
@@ -82,13 +92,13 @@ export function grade(q: Question, a: Answer, opts: { yoLenient: boolean }): Gra
     }
     case 'T2': {
       const text = a.kind === 'text' ? a.text : '';
-      const r = classify({ given: text, expected: q.expected, yoLenient: opts.yoLenient });
-      return { class: r.class, tags: withTag(q.tags, r.tag), given: text, expected: q.expected.primary, prompt: q.gloss };
+      const r = classify({ given: text, expected: q.expected, lemma: q.lemma, partners: q.partners, yoLenient: opts.yoLenient });
+      return { class: r.class, confusion: r.confusion, tags: withTag(q.tags, r.tag), given: text, expected: q.expected.primary, prompt: q.gloss };
     }
     case 'T3':
     case 'T4': {
       const text = a.kind === 'text' ? a.text : '';
-      const r = classify({ given: text, expected: q.expected, lemma: q.lemma, feat: q.feat, yoLenient: opts.yoLenient });
+      const r = classify({ given: text, expected: q.expected, lemma: q.lemma, feat: q.feat, partners: q.partners, yoLenient: opts.yoLenient });
       const prompt = q.type === 'T3'
         ? `${q.lemma.bare} / ${q.feat.replace(/^case\./, '')}`
         : `${q.sentence} (${q.lemma.bare})`;

@@ -86,30 +86,6 @@ FEATURE_BACKLOG.md の「動詞活用形入力時のリアルタイム語幹変�
 - T2・T3 で解答にアクセント記号が含まれていた場合のみ、位置の正誤を結果画面に別に表示し、attempts.stressOk に記録する。評価には影響させない。stats では、stressOk を持つ解答を phon.stress の解答としても集計する。
 
 ## その他
-動詞の体（完了体/不完了体）の区別を実装する。順序は A1→A2→A3→A4→A5。質問はせず、細部は DECISIONS.md に1行で追記。各項目に vitest を追加。
-
-### A1 体の表示
-- 訳語を表示するすべての箇所（T1選択肢、T2出題、結果画面、単語リスト、辞書検索）で、動詞は訳の後ろにバッジを付ける: impf〔不完〕/ pf〔完〕/ both〔両体〕。undefined なら付けない。
-- 結果画面で partnerIds を持つ動詞には、ペアを1行表示する（例: делать〔不完〕↔ сделать〔完〕）。
-- T3 の出題ラベル: aspect が 'pf' の動詞の pres.* は「未来形」と表示する（例: 「未来形・1人称単数」）。FeatKey・タグは変更しない。
-
-### A2 T2の曖昧さ解消
-- T2 の出題には必ずバッジを付ける（A1）。
-- 出題する動詞と partnerIds の動詞の表示訳（glossJa、なければ glossEn の先頭2件）が normalize 後に同一の場合、出題に補足を付ける: impf は「（過程・反復）」、pf は「（1回・完了）」。
-- T1 の誤答選択肢から、partnerIds の動詞と、表示訳が正解と同一の語を除外する。
-
-### A3 誤答分類 wrong_aspect
-- classify の wrong_form の直後（B1 の no_alternation より前）に `wrong_aspect` を追加する。条件:
-  - T2: normalize(given) が partnerIds のいずれかの不定形と一致する。
-  - T3/T4: normalize(given) が partnerIds のいずれかの同じ FeatKey の形と一致する。
-- 評価は Again。confusion は {expected: 正解の aspect, given: 解答した語の aspect}。タグ verb.aspect.pair を付与する。
-- 結果画面に「体の取り違え: 正解は〔完〕сделать（あなたの解答は〔不完〕делать）」と表示する。
-
-### A4 日本語訳生成の改善
-- gloss タスクの入力を `[{id, ru, en, aspect?, partner?}]` に拡張する（partner は対になる動詞の不定形、最初の1件）。
-- gloss の system_instruction に追記:「動詞は体の違いが分かる訳にする。不完了体は過程・反復（例: 読んでいる／読む）、完了体は1回の完了・結果（例: 読み終える／読んでしまう）を優先し、ペアが同じ訳にならないようにする。」
-- 単語リストに登録された訳がペアで同一のときも、表示時に A2 の補足を付ける（登録された訳そのものは書き換えない）。
-
 ### A5 体の使い分けドリル（U14で解放）
 - タグ verb.aspect を verb.aspect.pair（既存の擬似 FeatKey `aspect` のT3、A3）と verb.aspect.choice（文脈での選択）に分割する。U14 のタグはこの2つにする。既存の attempts の verb.aspect は verb.aspect.pair に読み替える。
 - 新タイプ T10: 文脈つきの穴埋め文に、ペアの両方の不定形を並べて表示し、正しい体の正しい形を入力させる。例: 「Вчера я ___ всю книгу.（читать / прочитать）」→ прочитал。

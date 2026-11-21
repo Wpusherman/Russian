@@ -1,6 +1,6 @@
 import { computeUnlocked, currentUnit, unlockedTags, UNITS, type Unit } from '../content/units';
 import { isCorrectClass } from '../core/classify';
-import { fillBlank, glossOf, stressInfo, type Graded, type Question } from '../core/grade';
+import { aspectNote, fillBlank, glossOf, stressInfo, type Graded, type Question } from '../core/grade';
 import { isNumeralEligible, numeralExpected, T11_NUMBERS } from '../core/numeral';
 import { newFsrs, retrievability, review, STATE_REVIEW } from '../core/scheduler';
 import {
@@ -8,7 +8,7 @@ import {
   type ExtraItem, type PlannedItem, type SessionCard,
 } from '../core/session';
 import { startOfDay, tagStats, type TagStat } from '../core/stats';
-import { expectedForm, prepTag, tagsForFeat } from '../core/tags';
+import { aspectBadge, expectedForm, prepTag, tagsForFeat } from '../core/tags';
 import type { Attempt, RatingNum } from '../core/types';
 import { normalize } from '../core/normalize';
 import { db, type CardRow, type ItemRow, type LemmaRow, type T4Payload, type UnitStateRow } from './db';
@@ -147,12 +147,15 @@ function shuffle<T>(a: T[], rng: () => number): T[] {
 
 async function distractors(lemma: LemmaRow, rng: () => number): Promise<string[]> {
   const own = glossOf(lemma);
+  const partnerIds = new Set(lemma.partnerIds ?? []);
   const pick = async (lo: number, hi: number) => {
     const rows = await db.lemmas.where('[pos+rank]').between([lemma.pos, lo], [lemma.pos, hi], true, true).toArray();
     const glosses = new Set<string>();
     for (const r of shuffle(rows, rng)) {
       const g = glossOf(r);
-      if (r.id !== lemma.id && g && g !== own) glosses.add(g);
+      // A2: never offer the aspect partner or a word with the same display gloss.
+      if (r.id === lemma.id || partnerIds.has(r.id) || !g || g === own) continue;
+      glosses.add(g + aspectBadge(r));
       if (glosses.size >= 3) break;
     }
     return [...glosses];
@@ -175,10 +178,15 @@ async function phraseDistractors(lemma: LemmaRow, rng: () => number): Promise<st
   for (const r of shuffle(rows.filter((x): x is LemmaRow => !!x), rng)) {
     if (r.id === lemma.id || (!r.user && !/\s/.test(r.bare))) continue;
     const g = glossOf(r);
-    if (g && g !== own && !out.includes(g)) out.push(g);
+    if (g && g !== own && !out.includes(g + aspectBadge(r))) out.push(g + aspectBadge(r));
     if (out.length >= 3) break;
   }
   return out;
+}
+
+async function partnersOf(lemma: LemmaRow): Promise<LemmaRow[]> {
+  if (!lemma.partnerIds || lemma.partnerIds.length === 0) return [];
+  return (await db.lemmas.bulkGet(lemma.partnerIds)).filter((x): x is LemmaRow => !!x);
 }
 
 /** Turn a planned item into a displayable question. Returns null when its data no longer exists. */
@@ -195,6 +203,7 @@ export async function buildQuestion(p: PlannedItem, rng: () => number = Math.ran
       return {
         type: 'T4', itemId: p.itemId, lemmaId: lemma.id, tags: item.tags, lemma, feat: pl.feat,
         sentence: pl.sentence_ru, translation: pl.translation_ja, explain: pl.explain_ja, expected,
+        partners: await partnersOf(lemma),
       };
     }
     return {
@@ -209,18 +218,25 @@ export async function buildQuestion(p: PlannedItem, rng: () => number = Math.ran
   switch (type) {
     case 'T1': {
       if (!gloss) return null;
+      const correctOption = gloss + aspectBadge(lemma);
       const phrase = await phraseDistractors(lemma, rng);
       const filler = phrase.length >= 3 ? [] : await distractors(lemma, rng);
-      const wrong = [...new Set([...phrase, ...filler])].filter((g) => g !== gloss).slice(0, 3);
-      const options = shuffle([gloss, ...wrong], rng);
-      return { ...base, type: 'T1', tags: vocabTags(lemma), lemma, hint: lemma.hint, options, correct: options.indexOf(gloss) };
+      const wrong = [...new Set([...phrase, ...filler])].filter((g) => g !== correctOption).slice(0, 3);
+      const options = shuffle([correctOption, ...wrong], rng);
+      return { ...base, type: 'T1', tags: vocabTags(lemma), lemma, hint: lemma.hint, options, correct: options.indexOf(correctOption) };
     }
-    case 'T2':
-      return { ...base, type: 'T2', tags: vocabTags(lemma), lemma, gloss, hint: lemma.hint, expected: { primary: lemma.accented, variants: [] } };
+    case 'T2': {
+      const partners = await partnersOf(lemma);
+      const note = aspectNote(lemma, partners) ?? undefined;
+      return {
+        ...base, type: 'T2', tags: vocabTags(lemma), lemma, gloss, hint: lemma.hint,
+        expected: { primary: lemma.accented, variants: [] }, partners, ...(note ? { note } : {}),
+      };
+    }
     case 'T3': {
       const expected = feat ? expectedForm(lemma, feat) : null;
       if (!feat || !expected) return null;
-      return { ...base, type: 'T3', tags: tagsForFeat(lemma, feat), lemma, feat, gloss, expected };
+      return { ...base, type: 'T3', tags: tagsForFeat(lemma, feat), lemma, feat, gloss, expected, partners: await partnersOf(lemma) };
     }
     case 'T5': {
       if (!stressable(lemma)) return null;

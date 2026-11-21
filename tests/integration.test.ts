@@ -471,3 +471,48 @@ describe('T11 numeral drill (N1)', () => {
     expect(grade(q, { kind: 'text', text: 'ъъъ' }, { yoLenient: true }).class).toBe('wrong');
   });
 });
+
+describe('aspect questions (A1-A4)', () => {
+  const impf = (): Lemma => ({
+    id: 'v-делать', bare: 'делать', accented: 'де\u0301лать', pos: 'verb', rank: 20, level: 'A1', aspect: 'impf',
+    partnerIds: ['v-сделать'], glossJa: 'する', glossEn: ['do'], forms: { 'past.m': f('де\u0301лал') },
+  });
+  const pf = (): Lemma => ({
+    id: 'v-сделать', bare: 'сделать', accented: 'сде\u0301лать', pos: 'verb', rank: 21, level: 'A1', aspect: 'pf',
+    partnerIds: ['v-делать'], glossJa: '作る', glossEn: ['make'], forms: { 'past.m': f('сде\u0301лал') },
+  });
+  const filler = (i: number): Lemma => ({
+    id: `v-filler${i}`, bare: `filler${i}`, accented: `filler${i}`, pos: 'verb', rank: 22 + i, level: 'A1',
+    glossJa: `別${i}`, glossEn: [`other ${i}`], forms: { 'past.m': f(`filler${i}л`) },
+  });
+
+  it('attaches the aspect partner, shows the nuance, and grades the partner form as wrong_aspect', async () => {
+    await db.lemmas.bulkPut([toRow(impf()), toRow(pf())]);
+    const q = await buildQuestion({ itemId: 'T2:v-делать', type: 'T2', lemmaId: 'v-делать', slot: 'weak' });
+    if (q?.type !== 'T2') throw new Error('expected T2');
+    expect(q.partners?.map((p) => p.id)).toEqual(['v-сделать']);
+    expect(q.note).toBeUndefined(); // different glosses here
+    const g = grade(q, { kind: 'text', text: 'Сделать' }, { yoLenient: true });
+    expect(g).toMatchObject({ class: 'wrong_aspect', confusion: { expected: 'impf', given: 'pf' } });
+    expect(g.tags).toContain('verb.aspect.pair');
+  });
+
+  it('adds the nuance note when the registered translations are identical', async () => {
+    const a = { ...impf(), glossJa: 'する' };
+    const b = { ...pf(), glossJa: 'する' };
+    await db.lemmas.bulkPut([toRow(a), toRow(b)]);
+    const q = await buildQuestion({ itemId: 'T2:v-делать', type: 'T2', lemmaId: 'v-делать', slot: 'weak' });
+    if (q?.type !== 'T2') throw new Error('expected T2');
+    expect(q.note).toBe('（過程・反復）');
+  });
+
+  it('never offers the aspect partner as a T1 distractor', async () => {
+    await db.lemmas.bulkPut([toRow(impf()), toRow(pf()), ...Array.from({ length: 4 }, (_, i) => toRow(filler(i)))]);
+    for (let seed = 1; seed <= 5; seed++) {
+      const q = await buildQuestion({ itemId: 'T1:v-делать', type: 'T1', lemmaId: 'v-делать', slot: 'weak' }, rngFrom(seed));
+      if (q?.type !== 'T1') throw new Error('expected T1');
+      expect(q.options.join('|')).not.toContain('作る');
+      expect(q.options[q.correct]).toBe('する〔不完〕');
+    }
+  });
+});

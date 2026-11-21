@@ -8,6 +8,8 @@ export type ClassifyInput = {
   /** Needed for wrong_form detection (T3 / T4). */
   lemma?: Lemma;
   feat?: FeatKey;
+  /** Aspect partners of `lemma` (A3 wrong_aspect). */
+  partners?: readonly Lemma[];
   yoLenient?: boolean;
 };
 
@@ -90,6 +92,17 @@ export function classify(input: ClassifyInput): ClassifyResult {
     }
   }
 
+  // 3.5 wrong_aspect: the answer is the partner verb (infinitive for T2, the same form for T3 / T4)
+  if (input.lemma?.aspect && input.partners && input.partners.length > 0) {
+    for (const p of input.partners) {
+      if (!p.aspect || p.aspect === input.lemma.aspect) continue;
+      const hit = input.feat
+        ? (() => { const f = p.forms[input.feat!]; return f ? candidates(f).some((c) => normalize(c, opts) === given) : false; })()
+        : normalize(p.bare, opts) === given;
+      if (hit) return { class: 'wrong_aspect', confusion: { expected: input.lemma.aspect, given: p.aspect }, tag: 'verb.aspect.pair' };
+    }
+  }
+
   // 4. spelling_rule
   for (const c of cands) {
     const tag = spellingRuleTag(given, c, yoLenient);
@@ -118,6 +131,7 @@ export function ratingFor(args: { class: AnswerClass; type: ItemType; hintUsed: 
   switch (args.class) {
     case 'wrong':
     case 'wrong_form':
+    case 'wrong_aspect':
     case 'spelling_rule':
       return 1;
     case 'typo':
@@ -132,6 +146,7 @@ export const CLASS_JA: Record<AnswerClass, string> = {
   correct: '正解',
   orthographic: '正解（ё/е・アクセント表記の違い）',
   wrong_form: '別の語形',
+  wrong_aspect: '体の取り違え',
   spelling_rule: '綴りの規則ミス',
   typo: 'タイプミス',
   wrong: '不正解',
