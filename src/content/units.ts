@@ -18,7 +18,7 @@ export const UNITS: Unit[] = [
   unit('U1', '綴りの規則とアクセント', ['spell.*', 'phon.stress']),
   unit('U2', '名詞の性・複数主格', ['noun.gender', 'noun.nom.*']),
   unit('U3', '人称代名詞・これは', ['pron.personal']),
-  unit('U4', '動詞の現在形', ['verb.pres.*', 'verb.pres.alt']),
+  unit('U4', '動詞の現在形', ['verb.pres.*', 'verb.pres.alt', 'verb.reflexive']),
   unit('U5', '前置格', ['noun.prep.sg', 'prep.в', 'prep.на', 'prep.о']),
   unit('U6', '対格', ['noun.acc.sg']),
   unit('U7', '形容詞・所有代名詞の主格での一致', ['adj.nom.*', 'pron.possessive']),

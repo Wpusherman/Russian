@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLASS_JA, classify, damerauLevenshtein, ratingFor } from '../src/core/classify';
+import { CLASS_JA, classify, damerauLevenshtein, ratingFor, reflexiveWarning } from '../src/core/classify';
 import { aspectNote, isUncertainGloss } from '../src/core/grade';
 import { normalize } from '../src/core/normalize';
 import { confusionCounts, DAY_MS, tagStats, wilsonLB } from '../src/core/stats';
@@ -291,6 +291,27 @@ describe('consonant alternation (B1)', () => {
     expect(tagsForFeat(sprosit, 'pres.1sg')).toContain('verb.pres.alt');
     expect(tagsForFeat(sprosit, 'pres.2sg')).not.toContain('verb.pres.alt');
     expect(tagsForFeat(pisat, 'pres.2sg')).toContain('verb.pres.alt');
+  });
+});
+
+describe('reflexive verbs (B2)', () => {
+  const uchitsya: Lemma = {
+    ...govorit, id: 'v-учиться', bare: 'учиться', accented: 'учи́ться', forms: { 'pres.1sg': form('учу́сь'), 'pres.2sg': form('у́чишься') },
+  };
+  it('classifies the missing -ся/-сь as reflexive_drop', () => {
+    expect(classify({ given: 'учу', expected: uchitsya.forms['pres.1sg']!, lemma: uchitsya, feat: 'pres.1sg' })).toEqual({ class: 'reflexive_drop', tag: 'verb.reflexive' });
+    expect(classify({ given: 'учишь', expected: uchitsya.forms['pres.2sg']!, lemma: uchitsya, feat: 'pres.2sg' }).class).toBe('reflexive_drop');
+    expect(classify({ given: 'учусь', expected: uchitsya.forms['pres.1sg']!, lemma: uchitsya, feat: 'pres.1sg' }).class).toBe('correct');
+    expect(ratingFor({ class: 'reflexive_drop', type: 'T3', hintUsed: false, latencyMs: 1000 })).toBe(1);
+    expect(CLASS_JA.reflexive_drop).toBe('再帰接尾辞の脱落');
+  });
+  it('tags every T3 of a reflexive verb and warns before submitting when liveWarnings is on', () => {
+    expect(tagsForFeat(uchitsya, 'pres.1sg')).toContain('verb.reflexive');
+    expect(tagsForFeat(uchitsya, 'pres.2sg')).toContain('verb.reflexive');
+    expect(reflexiveWarning(uchitsya, 'учу', true)).toBe(true);
+    expect(reflexiveWarning(uchitsya, 'учусь', true)).toBe(false);
+    expect(reflexiveWarning(uchitsya, 'учу', false)).toBe(false);
+    expect(reflexiveWarning(govorit, 'говорю', true)).toBe(false);
   });
 });
 

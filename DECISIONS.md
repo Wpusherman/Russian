@@ -65,6 +65,8 @@
 - 同表記の辞書語が複数あるときは登録前に候補（id と訳）を選ばせ、choices で lemmaId を指定して登録する。未指定なら頻度順位が最小の1件。
 - 動詞の訳語には体のバッジ（impf〔不完〕/pf〔完〕/both〔両体〕）を付け、結果画面にペアを1行表示する。T1の誤答肢からは partnerIds と同一表示訳を除き、T2ではペアの表示訳が同一なら（過程・反復）/（1回・完了）を添える。
 - classify は wrong_form の直後に wrong_aspect を判定する（T2は相手の不定形、T3/T4は同じ FeatKey の形）。評価は Again、タグは verb.aspect.pair、confusion には体を記録する。
+- 見出し語が ся/сь で終わる動詞の全T3に verb.reflexive を付け（U4の練習タグ、解放条件の対象外）、解答が接尾辞を落としていれば reflexive_drop（Again）とする。
+- liveWarnings（初期値 false）が true のときだけ、送信前に -ся/-сь の脱落確認を出し、確認して送信した解答は hintCount+1 とする。
 - alt を持つ動詞の pres.* に verb.pres.alt を付け（scope 1sg は pres.1sg のみ）、U4 の練習タグに加えるが単元の解放条件には含めない。
 - classify は wrong_aspect の次に no_alternation を判定する（expected の pres.1sg 語幹末尾 Y を X にした形／у・ю 入れ替え、または不定形語幹で始まる解答）。評価は Again・タグ verb.pres.alt。
 - U4 の新規枠は conj1 と conj2 の n がともに10以上になるまで、alt なし・非再帰の動詞を優先する。結果画面は alt 動詞の T3 で、誤答時または初回正解時に交替カードを出す。

@@ -27,7 +27,7 @@ export function prepTag(word: string): string | null {
 
 const FIXED_TAGS = [
   'spell.y_i', 'spell.o_e', 'spell.a_ya', 'phon.stress', 'noun.gender',
-  'verb.pres.conj1', 'verb.pres.conj2', 'verb.pres.irreg', 'verb.pres.alt', 'verb.past', 'verb.imp', 'verb.aspect', 'verb.aspect.pair',
+  'verb.pres.conj1', 'verb.pres.conj2', 'verb.pres.irreg', 'verb.pres.alt', 'verb.reflexive', 'verb.past', 'verb.imp', 'verb.aspect', 'verb.aspect.pair',
   'verb.aspect.choice', 'verb.motion',
   'num.gov', 'pron.personal', 'pron.possessive', 'vocab',
 ];
@@ -137,6 +137,8 @@ export function tagsForFeat(lemma: Lemma, feat: FeatKey): string[] {
     tags.push('verb.imp');
   }
   if (lemma.pos === 'verb' && MOTION_VERBS.includes(bare) && (p[0] === 'pres' || p[0] === 'past')) tags.push('verb.motion');
+  // B2: every T3 (and T4) of a reflexive verb exercises the -ся / -сь suffix.
+  if (lemma.pos === 'verb' && /(ся|сь)$/.test(bare)) tags.push('verb.reflexive');
   // B1: the alternation tag goes on the persons where the stem actually alternates.
   if (lemma.alt && p[0] === 'pres' && (lemma.alt.scope === 'all' || feat === 'pres.1sg')) tags.push('verb.pres.alt');
   const form = lemma.forms[feat];
@@ -200,7 +202,7 @@ const FIXED_TAG_JA: Record<string, string> = {
   'spell.y_i': '綴り：и / ы の規則', 'spell.o_e': '綴り：о / е の規則', 'spell.a_ya': '綴り：а・у / я・ю の規則',
   'phon.stress': 'アクセント', 'noun.gender': '名詞の性',
   'verb.pres.conj1': '現在形・第1変化', 'verb.pres.conj2': '現在形・第2変化', 'verb.pres.irreg': '現在形・不規則',
-  'verb.pres.alt': '子音交替', 'verb.past': '過去形', 'verb.imp': '命令形', 'verb.aspect': '体', 'verb.aspect.pair': '体のペア', 'verb.aspect.choice': '体の選択', 'verb.motion': '運動の動詞',
+  'verb.pres.alt': '子音交替', 'verb.reflexive': '再帰動詞', 'verb.past': '過去形', 'verb.imp': '命令形', 'verb.aspect': '体', 'verb.aspect.pair': '体のペア', 'verb.aspect.choice': '体の選択', 'verb.motion': '運動の動詞',
   'num.gov': '数詞と格', 'pron.personal': '人称代名詞', 'pron.possessive': '所有代名詞', vocab: '語彙',
 };
 

@@ -121,6 +121,11 @@ export function classify(input: ClassifyInput): ClassifyResult {
     }
   }
 
+  // 3.7 reflexive_drop: the answer is the reflexive form without -ся / -сь (B2).
+  if (input.lemma && /(ся|сь)$/.test(normalize(input.lemma.bare)) && (given + 'ся' === normalize(input.expected.primary, opts) || given + 'сь' === normalize(input.expected.primary, opts))) {
+    return { class: 'reflexive_drop', tag: 'verb.reflexive' };
+  }
+
   // 4. spelling_rule
   for (const c of cands) {
     const tag = spellingRuleTag(given, c, yoLenient);
@@ -151,6 +156,7 @@ export function ratingFor(args: { class: AnswerClass; type: ItemType; hintUsed: 
     case 'wrong_form':
     case 'wrong_aspect':
     case 'no_alternation':
+    case 'reflexive_drop':
     case 'spelling_rule':
       return 1;
     case 'typo':
@@ -167,7 +173,13 @@ export const CLASS_JA: Record<AnswerClass, string> = {
   wrong_form: '別の語形',
   wrong_aspect: '体の取り違え',
   no_alternation: '子音交替の誤り',
+  reflexive_drop: '再帰接尾辞の脱落',
   spelling_rule: '綴りの規則ミス',
   typo: 'タイプミス',
   wrong: '不正解',
 };
+
+/** B2: true when a pre-submit warning should be shown for a reflexive verb answer. */
+export function reflexiveWarning(lemma: Pick<Lemma, 'bare' | 'pos'>, given: string, liveWarnings: boolean): boolean {
+  return liveWarnings && lemma.pos === 'verb' && /(ся|сь)$/.test(normalize(lemma.bare)) && !/(ся|сь)$/.test(normalize(given));
+}

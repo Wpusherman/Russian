@@ -11,6 +11,8 @@ export type Settings = {
   sessionSize: number;
   dailyNewLimit: number;
   yoLenient: boolean;
+  /** Show answer hints before submitting (reflexive / spelling warnings). Any warning makes the answer a hint. */
+  liveWarnings: boolean;
   inputMode: 'translit' | 'os';
   showKeyboard: boolean;
   voiceURI: string;
@@ -44,6 +46,7 @@ export const DEFAULTS: Settings = {
   sessionSize: 20,
   dailyNewLimit: 15,
   yoLenient: true,
+  liveWarnings: false,
   inputMode: 'translit',
   showKeyboard: false,
   voiceURI: '',

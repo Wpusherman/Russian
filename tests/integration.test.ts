@@ -619,3 +619,10 @@ describe('alternation card state (B1)', () => {
     expect(orderNewForU4(['v-alt', 'v-ся', 'v-plain'], byId, done)).toEqual(['v-alt', 'v-ся', 'v-plain']);
   });
 });
+
+
+describe('settings (B2)', () => {
+  it('liveWarnings defaults to off', async () => {
+    expect((await loadSettings()).liveWarnings).toBe(false);
+  });
+});

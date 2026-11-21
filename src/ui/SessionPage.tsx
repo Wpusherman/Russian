@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cachedExplain, runExplain } from '../ai/tasks';
-import { CLASS_JA, isCorrectClass, ratingFor } from '../core/classify';
+import { CLASS_JA, isCorrectClass, ratingFor, reflexiveWarning } from '../core/classify';
 import { grade, hintText, isUncertainGloss, targetLabel, type Answer, type Graded, type Question } from '../core/grade';
 import { isVowel, normalize } from '../core/normalize';
 import { aspectBadge, confusionLabelJa, featLabelJa } from '../core/tags';
@@ -109,6 +109,7 @@ function QuestionView(props: {
   const { q, settings, result, onAnswer } = props;
   const [text, setText] = useState('');
   const [hints, setHints] = useState(0);
+  const [pending, setPending] = useState<string | null>(null);
   const answered = result !== null;
   const hintable = q.type === 'T2' || q.type === 'T3';
 
@@ -165,11 +166,29 @@ function QuestionView(props: {
     );
   } else {
     const expected = q.type === 'T6' ? null : q.expected;
+    const submitText = (final: string) => {
+      if (q.type !== 'T6' && 'lemma' in q && reflexiveWarning(q.lemma, final, settings.liveWarnings)) {
+        setPending(final);
+        return;
+      }
+      onAnswer({ kind: 'text', text: final }, hints);
+    };
     input = (
       <div>
-        <RuInput key={q.itemId} value={text} onChange={setText} autoFocus disabled={answered}
+        <RuInput key={q.itemId} value={text} onChange={setText} autoFocus disabled={answered || pending !== null}
           defaultMode={settings.inputMode} showKeyboardDefault={settings.showKeyboard}
-          onEnter={(final) => onAnswer({ kind: 'text', text: final }, hints)} />
+          onEnter={submitText} />
+        {pending !== null && (
+          <div className="box warn">
+            <p>-ся / -сь が抜けています（母音の後は -сь）。このまま送信しますか？</p>
+            <div className="row">
+              <button className="primary" onClick={() => { const t = pending; setPending(null); onAnswer({ kind: 'text', text: t }, hints + 1); }}>
+                このまま送信
+              </button>
+              <button className="ghost" onClick={() => setPending(null)}>戻る</button>
+            </div>
+          </div>
+        )}
         {hintable && expected && !answered && (
           <div className="row">
             <button className="ghost small" tabIndex={-1} onClick={() => setHints((h) => h + 1)}>ヒント（1文字ずつ） <kbd>Alt+H</kbd></button>
@@ -254,6 +273,7 @@ function ResultView(props: {
       </div>
       {!ok && q.type !== 'T1' && <div>あなたの解答：<span className="ru">{g.given || '（空欄）'}</span></div>}
       {g.class === 'wrong_aspect' && <div className="confusion">{aspectMistake(q, g.given)}</div>}
+      {g.class === 'reflexive_drop' && <div className="confusion">-ся / -сь が抜けています（母音の後は -сь）</div>}
       {(q.type === 'T2' || q.type === 'T3' || q.type === 'T4') && (q.partners?.length ?? 0) > 0 && (
         <div className="muted">ペア：{q.partners!.map((p) => `${p.bare}${aspectBadge(p)}`).join(' ↔ ')}</div>
       )}

@@ -66,6 +66,10 @@ export function SettingsPage(): ReactNode {
             <input type="checkbox" checked={s.yoLenient} onChange={(e) => void set('yoLenient', e.target.checked)} />
             ё を е と書いても正解にする（yoLenient）
           </label>
+          <label className="check">
+            <input type="checkbox" checked={s.liveWarnings} onChange={(e) => void set('liveWarnings', e.target.checked)} />
+            送信前に語形の注意を出す（-ся の脱落など。注意が出た解答はヒント扱い）
+          </label>
         </div>
       </section>
 
