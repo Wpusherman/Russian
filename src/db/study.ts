@@ -267,6 +267,8 @@ export async function buildQuestion(p: PlannedItem, rng: () => number = Math.ran
         adjective: lemma, noun, nounForm, feat, expected,
       };
     }
+    case 'T7':
+      return null; // translation practice is graded by AI on its own page, never planned here
     case 'T11': {
       const n = Number(feat);
       const expected = Number.isFinite(n) ? numeralExpected(lemma, n) : null;
@@ -413,6 +415,20 @@ export async function recordAttempt(input: RecordInput): Promise<Attempt> {
       await db.cards.put({ ...follow, lemmaId: q.lemmaId, createdAt: now, ...newFsrs(now) });
     }
   });
+  return attempt;
+}
+
+/** T7: store an AI-graded translation (tags stay empty so it never gates a unit). */
+export async function recordT7Attempt(input: {
+  itemId: string; ja: string; given: string; score: 0 | 0.5 | 1; corrected: string; now?: number;
+}): Promise<Attempt> {
+  const now = input.now ?? Date.now();
+  const attempt: Attempt = {
+    itemId: `T7:${input.itemId}`, ts: now, type: 'T7', given: input.given,
+    class: input.score === 1 ? 'correct' : 'wrong', rating: input.score === 1 ? 3 : 1,
+    latencyMs: 0, hintCount: 0, tags: [], prompt: input.ja, expected: input.corrected, score: input.score,
+  };
+  attempt.id = await db.attempts.add(attempt);
   return attempt;
 }
 

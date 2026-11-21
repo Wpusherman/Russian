@@ -12,8 +12,8 @@ import { ptDate } from './gemini';
 import { buildAnalyzePacket } from './packet';
 import type { AIProvider } from './provider';
 import {
-  analyzeJsonSchema, aspectItemsJsonSchema, explainJsonSchema, glossJsonSchema, noteJsonSchema,
-  type AnalyzeOutput, type AspectItem, type AspectItemsOutput, type ExplainOutput, type GlossOutput, type NewItem, type NoteOutput,
+  analyzeJsonSchema, aspectItemsJsonSchema, explainJsonSchema, glossJsonSchema, gradeT7JsonSchema, noteJsonSchema,
+  type AnalyzeOutput, type AspectItem, type AspectItemsOutput, type ExplainOutput, type GlossOutput, type GradeT7Output, type NewItem, type NoteOutput,
 } from './schemas';
 import { validateAspectItem, validateNewItem } from './validate';
 
@@ -124,6 +124,25 @@ export async function runGloss(provider: AIProvider, ctx: Pick<StudyContext, 'ca
     if (valid.has(it.id) && ja) glosses[it.id] = ja; // unknown ids are ignored
   }
   return saveGlosses(glosses, { onlyIfMissing: true });
+}
+
+// ---------- grade_t7 (T7 和文露訳) ----------
+
+export type T7Input = { attemptId: number; ja: string; given: string };
+
+/** Grade a batch of Japanese -> Russian translations, ignoring unknown / repeated attempt ids. */
+export async function runGradeT7(provider: AIProvider, inputs: T7Input[]): Promise<GradeT7Output> {
+  if (inputs.length === 0) return { results: [] };
+  const out = await provider.run<GradeT7Output>('grade_t7', inputs, gradeT7JsonSchema);
+  const wanted = new Set(inputs.map((i) => i.attemptId));
+  const seen = new Set<number>();
+  const results: GradeT7Output['results'] = [];
+  for (const r of out.results) {
+    if (!wanted.has(r.attemptId) || seen.has(r.attemptId)) continue;
+    seen.add(r.attemptId);
+    results.push(r);
+  }
+  return { results };
 }
 
 // ---------- aspect_items (A5 / T10) ----------

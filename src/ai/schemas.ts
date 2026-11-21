@@ -79,6 +79,8 @@ export const gradeT7Z = z.object({
     attemptId: z.number(), score: z.union([z.literal(0), z.literal(0.5), z.literal(1)]), corrected: z.string(), comment_ja: z.string(),
   })),
 });
+export type GradeT7Output = z.infer<typeof gradeT7Z>;
+export type GradeT7Result = GradeT7Output['results'][number];
 export const gradeT7JsonSchema: JSONSchema = obj(['results'], {
   results: {
     type: 'array',

@@ -124,7 +124,7 @@ export function SettingsPage(): ReactNode {
               <button className="small" onClick={() => setShowKey((v) => !v)}>{showKey ? '隠す' : '表示'}</button>
             </span>
           </label>
-          {AI_TASKS.filter((t) => t !== 'grade_t7').map((t) => (
+          {AI_TASKS.map((t) => (
             <label key={t}>モデル（{t}）
               <input defaultValue={s.models[t]} placeholder={DEFAULT_MODELS[t]}
                 onBlur={(e) => void set('models', { ...s.models, [t]: e.target.value.trim() || DEFAULT_MODELS[t] })} />

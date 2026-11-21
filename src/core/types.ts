@@ -28,7 +28,7 @@ export type Lemma = {
   forms: Record<FeatKey, Form>;
 };
 
-export type ItemType = 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6' | 'T9' | 'T10' | 'T11';
+export type ItemType = 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6' | 'T7' | 'T9' | 'T10' | 'T11';
 export type AnswerClass = 'correct' | 'orthographic' | 'wrong_form' | 'wrong_aspect' | 'no_alternation' | 'reflexive_drop' | 'spelling_rule' | 'typo' | 'wrong';
 export type Confusion = { expected: FeatKey; given: FeatKey };
 /** FSRS rating: 1 Again, 2 Hard, 3 Good, 4 Easy */
@@ -48,6 +48,8 @@ export type Attempt = {
   tags: string[];
   /** B5: accent position was typed and compared (true = correct). */
   stressOk?: boolean;
+  /** T7: AI score (0 / 0.5 / 1). */
+  score?: number;
   /** Display data for samples / post-session list. */
   prompt?: string;
   expected?: string;

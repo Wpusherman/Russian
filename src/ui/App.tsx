@@ -14,11 +14,13 @@ import { HomePage } from './HomePage';
 import { SessionPage } from './SessionPage';
 import { SettingsPage } from './SettingsPage';
 import { StatsPage } from './StatsPage';
+import { TranslationPage } from './TranslationPage';
 import { UnitsPage } from './UnitsPage';
 import { WordlistsPage } from './WordlistsPage';
 
 const NAV: [string, string][] = [
   ['home', 'ホーム'], ['stats', '統計'], ['units', '単元'], ['wordlists', '単語リスト'], ['dict', '辞書'],
+  ['translation', '和文露訳'],
   ['reports', 'AIレポート'], ['quarantine', '検疫'], ['backlog', 'バックログ'], ['settings', '設定'],
 ];
 
@@ -155,6 +157,7 @@ export function App(): ReactNode {
     case 'units': body = <UnitsPage unitId={arg} />; break;
     case 'wordlists': body = <WordlistsPage />; break;
     case 'dict': body = <DictPage />; break;
+    case 'translation': body = <TranslationPage />; break;
     case 'reports': body = <ReportsPage />; break;
     case 'quarantine': body = <QuarantinePage />; break;
     case 'backlog': body = <BacklogPage />; break;

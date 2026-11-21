@@ -13,7 +13,7 @@ import { SCHEMA_VERSION, db, RusloDB, setDb } from '../src/db/db';
 import { reapplyUserData, setGenderOverride } from '../src/db/dict';
 import { toRow } from '../src/db/dict';
 import { loadSettings, setSetting } from '../src/db/settings';
-import { activeWeights, buildQuestion, buildSession, glossCandidates, loadContext, newLemmaQueue, orderNewForU4, recordAttempt } from '../src/db/study';
+import { activeWeights, buildQuestion, buildSession, glossCandidates, loadContext, newLemmaQueue, orderNewForU4, recordAttempt, recordT7Attempt } from '../src/db/study';
 import { newFsrs } from '../src/core/scheduler';
 import { createWordlist, dedupeStoredGlosses, findAmbiguities, saveGlosses } from '../src/db/wordlists';
 import { markAllBacklogExported, syncAppVersion } from '../src/db/backlog';
@@ -728,5 +728,14 @@ describe('gloss dedupe and AI skip (F2)', () => {
     expect((await db.lemmas.get('n-лампа'))?.glossJa).toBe('ランプ／電灯');
     expect((await loadSettings()).glossDedupDone).toBe(true);
     expect(await dedupeStoredGlosses()).toBe(0); // once only
+  });
+});
+
+
+describe('T7 translation attempts', () => {
+  it('stores the AI score with type T7 and no tags (never gates a unit)', async () => {
+    const a = await recordT7Attempt({ itemId: 'T4:1', ja: '私はモスクワに住んでいます。', given: 'Я живу в Москве.', score: 0.5, corrected: 'Я живу в Москве.', now: 123 });
+    expect(a).toMatchObject({ itemId: 'T7:T4:1', type: 'T7', score: 0.5, class: 'wrong', tags: [], prompt: '私はモスクワに住んでいます。' });
+    expect(await db.attempts.get(a.id!)).toEqual(a);
   });
 });
