@@ -46,6 +46,8 @@ export type Attempt = {
   latencyMs: number;
   hintCount: number;
   tags: string[];
+  /** B5: accent position was typed and compared (true = correct). */
+  stressOk?: boolean;
   /** Display data for samples / post-session list. */
   prompt?: string;
   expected?: string;

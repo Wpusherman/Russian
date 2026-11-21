@@ -11,3 +11,11 @@ export function convertAccent(s: string): string {
   }
   return out;
 }
+
+/**
+ * B5: typing "=" right after a vowel turns it into a stressed vowel (U+0301) and the "=" disappears.
+ * Works on Cyrillic text after transliteration; the length stays the same so the caret does not jump.
+ */
+export function applyAccentKey(text: string): string {
+  return text.replace(/([аеиоуыэюяАЕИОУЫЭЮЯ])=/g, '$1́');
+}

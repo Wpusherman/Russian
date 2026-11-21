@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CLASS_JA, classify, damerauLevenshtein, ratingFor, reflexiveWarning } from '../src/core/classify';
-import { aspectNote, isUncertainGloss } from '../src/core/grade';
+import { aspectNote, isUncertainGloss, typedStressOk } from '../src/core/grade';
 import { normalize } from '../src/core/normalize';
 import { spellingViolations } from '../src/core/spelling';
+import { applyAccentKey } from '../src/core/accent';
 import { confusionCounts, DAY_MS, tagStats, wilsonLB } from '../src/core/stats';
 import { ASPECT_FEAT, aspectBadge, expandTagPattern, tagsForFeat, verbConjType, confusionLabelJa } from '../src/core/tags';
 import { itemIdT9, parseItemId } from '../src/core/session';
@@ -339,6 +340,29 @@ describe('adjective agreement item (B4)', () => {
     });
     expect(ratingFor({ class: 'correct', type: 'T9', hintUsed: false, latencyMs: 8000 })).toBe(3);
     expect(ratingFor({ class: 'correct', type: 'T9', hintUsed: false, latencyMs: 8001 })).toBe(2);
+  });
+});
+
+describe('typed accents (B5)', () => {
+  it('turns "=" after a vowel into U+0301 and removes the "="', () => {
+    expect(applyAccentKey('книга=')).toBe('книга́');
+    expect(applyAccentKey('сло=во')).toBe('сло́во');
+    expect(applyAccentKey('стол=')).toBe('стол='); // no vowel right before
+    expect(applyAccentKey('a=')).toBe('a='); // Latin is transliterated first
+  });
+  it('compares typed stress positions with the expected ones', () => {
+    expect(typedStressOk('кни́га', 'кни́га')).toBe(true);
+    expect(typedStressOk('книга́', 'кни́га')).toBe(false);
+    expect(typedStressOk('книга', 'кни́га')).toBeUndefined();
+    expect(typedStressOk('кни́га', 'кни́га')).toBe(true);
+  });
+  it('counts typed-accent answers in phon.stress', () => {
+    const now = Date.UTC(2026, 5, 30);
+    const s = tagStats([
+      { ts: now, class: 'correct', tags: ['vocab'], stressOk: true },
+      { ts: now, class: 'wrong', tags: ['vocab'], stressOk: false },
+    ], now);
+    expect(s.get('phon.stress')).toMatchObject({ n: 2, k: 1 });
   });
 });
 

@@ -1,7 +1,9 @@
 import { convertAccent } from '../core/accent';
+import { featLabelJa } from '../core/tags';
 import { translit } from '../core/translit';
 import { mergeGloss, mergeHints, parseWordlistText } from '../core/wordlist';
-import { db, type LemmaRow, type WordlistEntry, type WordlistRow } from './db';
+import { db, type LemmaRow, type T4Payload, type WordlistEntry, type WordlistRow } from './db';
+import { addT4Item } from './study';
 import { findLemmas, lemmaKey } from './dict';
 import { loadSettings, setSetting } from './settings';
 
@@ -111,12 +113,64 @@ export async function createWordlist(name: string, text: string, choices: Readon
   }
   await saveGlosses(glosses);
   await saveHints(hints);
+  await generateHintItems(entries, hints);
   const all = await db.wordlists.toArray();
   const priority = all.reduce((m, l) => Math.max(m, l.priority), 0) + 1;
   await db.wordlists.add({ name: name.trim() || '無題のリスト', priority, active: true, entries });
   const saved = await db.lemmas.bulkGet(entries.map((e) => e.lemmaId));
   const unglossed = [...new Set(saved.filter((r): r is LemmaRow => !!r && !r.glossJa && r.glossEn.length === 0).map((r) => r.bare))];
   return { matched, created: newUser.length, total: entries.length, unglossed };
+}
+
+const HINT_CASE: Record<string, string> = { 主: 'nom', 生: 'gen', 属: 'gen', 与: 'dat', 対: 'acc', 造: 'ins', 具: 'ins', 前: 'prep' };
+
+/** "сесть на" -> "Я сяду на ___" when the first word is a known verb (W9). */
+async function hintSentence(lemma: LemmaRow): Promise<string> {
+  const [first, ...rest] = lemma.bare.split(/\s+/);
+  const verb = first ? (await findLemmas(first)).find((h) => h.pos === 'verb') : undefined;
+  const p1 = verb?.forms['pres.1sg'];
+  if (verb && p1) return `Я ${p1.primary.replace(/́/g, '')}${rest.length > 0 ? ` ${rest.join(' ')}` : ''} ___`;
+  return `${lemma.bare} ___`;
+}
+
+/**
+ * W9: turn a word-list annotation into T4 fill-in items. The case letters decide the noun form;
+ * +複 switches to plural. The noun is taken from the same list when possible, otherwise from A1-A2.
+ */
+export async function generateHintItems(entries: WordlistEntry[], hints: Readonly<Record<string, string>>, now = Date.now()): Promise<number> {
+  const rows = (await db.lemmas.bulkGet(entries.map((e) => e.lemmaId))).filter((r): r is LemmaRow => !!r);
+  // Only verbs and phrases can govern a case; a bare adverb such as "только +複" has no blank to fill.
+  const targets = rows.filter((r) => hints[r.id] && (r.pos === 'verb' || /\s/.test(r.bare)));
+  if (targets.length === 0) return 0;
+  let nouns = rows.filter((r) => r.pos === 'noun');
+  if (nouns.length === 0) {
+    const levels = await db.lemmas.where('level').anyOf('A1', 'A2').toArray();
+    nouns = levels.filter((r) => r.pos === 'noun' && !!r.forms['case.gen.pl']);
+  }
+  let added = 0;
+  for (const target of targets.slice(0, 20)) {
+    const hint = hints[target.id]!;
+    const letters = [...new Set((hint.match(/\+([主生属与対造具前複])/g) ?? []).map((s) => s.slice(1)))];
+    const num = letters.includes('複') ? 'pl' : 'sg';
+    const cases = [...new Set(letters.filter((c) => c !== '複').map((c) => HINT_CASE[c]).filter((c): c is string => !!c))];
+    const feats = (cases.length > 0 ? cases : ['nom']).map((c) => `case.${c}.${num}`);
+    const sentence = await hintSentence(target);
+    const picks = nouns.filter((n) => feats.some((f) => !!n.forms[f])).sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9)).slice(0, 2);
+    for (const noun of picks) {
+      for (const feat of feats) {
+        const form = noun.forms[feat];
+        if (!form) continue;
+        const payload: T4Payload = {
+          sentence_ru: sentence, lemma: noun.bare, lemmaId: noun.id, feat, answer: form.primary.replace(/́/g, ''),
+          translation_ja: `${target.bare}（${hint}）＋${featLabelJa(feat)}`,
+          explain_ja: `注記 ${hint} に従って${featLabelJa(feat)}の形を入れる。`,
+        };
+        await addT4Item(payload, noun, 'user', now);
+        added++;
+      }
+    }
+  }
+  return added;
 }
 
 export async function listWordlists(): Promise<WordlistRow[]> {

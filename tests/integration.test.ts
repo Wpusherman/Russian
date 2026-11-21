@@ -194,6 +194,29 @@ describe('word lists (M4)', () => {
     const list = (await db.wordlists.toArray())[0]!;
     expect(list.entries[0]!.lemmaId).toBe('n-лампа~2');
   });
+  it('creates T4 fill-in items from +case annotations (W9)', async () => {
+    await db.lemmas.put(toRow({ id: 'v-сесть', bare: 'сесть', accented: 'се́сть', pos: 'verb', rank: 50, level: 'A1', aspect: 'pf', glossEn: ['sit'], forms: { 'pres.1sg': f('ся́ду') } }));
+    await createWordlist('hint', 'сесть на +対\t乗る\nкнига\t本\nстол\t机\nтолько +複\tだけ');
+    const items = await db.items.toArray();
+    expect(items.length).toBeGreaterThan(0);
+    const sest = items.find((i) => i.payload.sentence_ru === 'Я сяду на ___');
+    expect(sest).toBeDefined();
+    expect(sest!.payload.feat).toBe('case.acc.sg');
+    expect(sest!.tags).toEqual(expect.arrayContaining(['noun.acc.sg', 'prep.на']));
+    const noun = await db.lemmas.get(sest!.payload.lemmaId);
+    expect(noun!.forms['case.acc.sg']!.primary.replace(/́/g, '')).toBe(sest!.payload.answer);
+    expect(items.some((i) => i.payload.sentence_ru.startsWith('только'))).toBe(false); // no blank for a bare adverb
+  });
+
+  it('uses the plural for +複 hints', async () => {
+    await db.lemmas.put(toRow({ id: 'v-играть', bare: 'играть', accented: 'игра́ть', pos: 'verb', rank: 51, level: 'A1', aspect: 'impf', glossEn: ['play'], forms: { 'pres.1sg': f('игра́ю') } }));
+    await createWordlist('hint-pl', 'играть в +前 +複\t遊ぶ\nкнига\t本');
+    const item = (await db.items.toArray()).find((i) => i.payload.feat === 'case.prep.pl');
+    expect(item).toBeDefined();
+    expect(item!.payload.sentence_ru).toBe('Я играю в ___');
+    expect(item!.tags).toEqual(expect.arrayContaining(['noun.prep.pl', 'prep.в']));
+  });
+
   it('uses the other phrases of the list as T1 distractors (W4)', async () => {
     await createWordlist('phrases', 'сесть на +対\t乗る\nвстать с +生\t起きる\nидти в +対\t行く\nприйти из +生\t来る');
     const q = await buildQuestion({ itemId: 'T1:u-сесть_на', type: 'T1', lemmaId: 'u-сесть_на', slot: 'new' }, rngFrom(1));
@@ -657,5 +680,20 @@ describe('T9 adjective agreement (B4)', () => {
     expect(qs[0]!.type).toBe('T9');
     expect(qs.every((q) => q.tags.includes('adj.nom.pl'))).toBe(true);
     expect(qs.length).toBeLessThanOrEqual(20);
+  });
+});
+
+
+describe('typed accent recording (B5)', () => {
+  it('stores stressOk on the attempt without changing the evaluation', async () => {
+    const q = await buildQuestion({ itemId: 'T2:n-книга', type: 'T2', lemmaId: 'n-книга', slot: 'weak' });
+    if (q?.type !== 'T2') throw new Error('expected T2');
+    const g = grade(q, { kind: 'text', text: 'кни́га' }, { yoLenient: true });
+    expect(g.class).toBe('correct');
+    expect(g.stressOk).toBe(false);
+    await recordAttempt({ question: q, graded: g, rating: 3, latencyMs: 1000, hintCount: 0, now: Date.now() });
+    expect((await db.attempts.toArray()).at(-1)?.stressOk).toBe(false);
+    const plain = grade(q, { kind: 'text', text: 'книга' }, { yoLenient: true });
+    expect(plain.stressOk).toBeUndefined();
   });
 });

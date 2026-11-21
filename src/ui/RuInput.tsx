@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { applyAccentKey } from '../core/accent';
 import { translit, translitLive } from '../core/translit';
 
 export type InputMode = 'translit' | 'os';
@@ -76,13 +77,13 @@ export function RuInput(props: Props): ReactNode {
 
   const apply = (raw: string, pos: number) => {
     if (mode === 'os') {
-      onChange(raw);
+      onChange(applyAccentKey(raw));
       return;
     }
     const live = translitLive(raw.slice(0, pos));
     const before = live.done + live.pending;
     caret.current = before.length;
-    onChange(before + raw.slice(pos));
+    onChange(applyAccentKey(before + raw.slice(pos)));
   };
 
   const insert = (ch: string) => {

@@ -35,6 +35,8 @@ export type Graded = {
   expected: string;
   /** Short prompt description stored with the attempt (used in AI samples). */
   prompt: string;
+  /** B5: set only when the answer contained an accent mark (true = position matches). */
+  stressOk?: boolean;
 };
 
 /** Display gloss: glossJa if present, otherwise the first two English glosses. */
@@ -56,6 +58,12 @@ export function aspectNote(lemma: Pick<Lemma, 'aspect' | 'glossJa' | 'glossEn'>,
 /** An AI gloss marked as uncertain by a trailing "?" (shown in a lighter colour). */
 export function isUncertainGloss(gloss: string): boolean {
   return /[?？]$/.test(gloss.trim());
+}
+
+/** B5: compare typed stress positions with the expected ones (undefined when nothing was typed). */
+export function typedStressOk(given: string, expected: string): boolean | undefined {
+  if (!given.includes('́')) return undefined;
+  return stressInfo(given).stressed.join(',') === stressInfo(expected).stressed.join(',');
 }
 
 /** Word without stress marks plus the indexes of its stressed characters (ё counts as stressed). */
@@ -100,7 +108,11 @@ export function grade(q: Question, a: Answer, opts: { yoLenient: boolean }): Gra
     case 'T2': {
       const text = a.kind === 'text' ? a.text : '';
       const r = classify({ given: text, expected: q.expected, lemma: q.lemma, partners: q.partners, yoLenient: opts.yoLenient });
-      return { class: r.class, confusion: r.confusion, tags: withTag(q.tags, r.tag), given: text, expected: q.expected.primary, prompt: q.gloss };
+      const stressOk = typedStressOk(text, q.expected.primary);
+      return {
+        class: r.class, confusion: r.confusion, tags: withTag(q.tags, r.tag), given: text, expected: q.expected.primary, prompt: q.gloss,
+        ...(stressOk !== undefined ? { stressOk } : {}),
+      };
     }
     case 'T3':
     case 'T4':
@@ -110,7 +122,11 @@ export function grade(q: Question, a: Answer, opts: { yoLenient: boolean }): Gra
       const prompt = q.type === 'T3'
         ? `${q.lemma.bare} / ${q.feat.replace(/^case\./, '')}`
         : `${q.sentence} (${q.lemma.bare})`;
-      return { class: r.class, confusion: r.confusion, tags: withTag(q.tags, r.tag), given: text, expected: q.expected.primary, prompt };
+      const stressOk = q.type === 'T3' ? typedStressOk(text, q.expected.primary) : undefined;
+      return {
+        class: r.class, confusion: r.confusion, tags: withTag(q.tags, r.tag), given: text, expected: q.expected.primary, prompt,
+        ...(stressOk !== undefined ? { stressOk } : {}),
+      };
     }
     case 'T5': {
       const idx = a.kind === 'stress' ? a.index : -1;

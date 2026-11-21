@@ -65,6 +65,9 @@
 - 同表記の辞書語が複数あるときは登録前に候補（id と訳）を選ばせ、choices で lemmaId を指定して登録する。未指定なら頻度順位が最小の1件。
 - 動詞の訳語には体のバッジ（impf〔不完〕/pf〔完〕/both〔両体〕）を付け、結果画面にペアを1行表示する。T1の誤答肢からは partnerIds と同一表示訳を除き、T2ではペアの表示訳が同一なら（過程・反復）/（1回・完了）を添える。
 - classify は wrong_form の直後に wrong_aspect を判定する（T2は相手の不定形、T3/T4は同じ FeatKey の形）。評価は Again、タグは verb.aspect.pair、confusion には体を記録する。
+- 注記付きの動詞・フレーズからT4を自動生成する。文は先頭の動詞をpres.1sgにして「Я … ___」、名詞は同じリスト→A1-A2から選び、注記の格・数（+複）で形を決める。タグは tagsForFeat と直前の前置詞。
+- addT4Item の重複判定は文・lemmaId・feat の3つで行う。
+- Translit/OS の両モードで母音直後の `=` を U+0301 に変換する（`=` は消える）。T2/T3で解答に U+0301 が含まれるときだけ typedStressOk を attempts.stressOk に記録し、評価は変えない。stats では stressOk を phon.stress として加算する。
 - T9 は `T9:<adjId>:<nounId>:<feat>`。形容詞・名詞はA1-A2、featは解放済みの adj.<case>.<g> で、gがm/f/nなら性gの名詞の単数格、plなら任意の名詞の複数格を表示する。速度しきい値は8秒で、形容詞タグの弱点枠では50%でT9にする。
 - 統計のタグ行に「集中練習」ボタンを置き、`#/session?tag=...` でそのタグだけのセッションを開始する。形容詞タグではT9を優先する。
 - spellExceptions は build-dict が dict.meta.json に出し、起動時に settings.spellExceptions へ読み込む。送信後は常に解答の違反2文字に赤波線と規則名を出し、送信前は liveWarnings が true のときだけ入力欄背面に下線を出す（既存の spelling_rule 判定は変更しない）。

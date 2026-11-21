@@ -308,6 +308,11 @@ function ResultView(props: {
       )}
       {g.class === 'wrong_aspect' && <div className="confusion">{aspectMistake(q, g.given)}</div>}
       {g.class === 'reflexive_drop' && <div className="confusion">-ся / -сь が抜けています（母音の後は -сь）</div>}
+      {g.stressOk !== undefined && (
+        <div className={g.stressOk ? 'ok-text' : 'confusion'}>
+          アクセント：{g.stressOk ? '位置は正しいです' : `位置がずれています（正解：${g.expected}）`}
+        </div>
+      )}
       {(q.type === 'T2' || q.type === 'T3' || q.type === 'T4') && (q.partners?.length ?? 0) > 0 && (
         <div className="muted">ペア：{q.partners!.map((p) => `${p.bare}${aspectBadge(p)}`).join(' ↔ ')}</div>
       )}

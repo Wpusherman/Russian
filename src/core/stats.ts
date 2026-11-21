@@ -15,7 +15,7 @@ export function wilsonLB(k: number, n: number): number {
 
 export type TagStat = { tag: string; n: number; k: number; acc: number; lb: number; weakness: number; trend: number };
 
-type StatAttempt = Pick<Attempt, 'ts' | 'class' | 'tags'>;
+type StatAttempt = Pick<Attempt, 'ts' | 'class' | 'tags'> & { stressOk?: boolean };
 
 /** Per-tag stats over the last 30 days. */
 export function tagStats(attempts: StatAttempt[], now: number): Map<string, TagStat> {
@@ -25,21 +25,24 @@ export function tagStats(attempts: StatAttempt[], now: number): Map<string, TagS
   for (const a of attempts) {
     if (a.ts < from || a.ts > now) continue;
     const ok = isCorrectClass(a.class) ? 1 : 0;
-    // A5: legacy attempts tagged "verb.aspect" are read as the aspect-pair tag.
-    const tags = new Set(a.tags.map((t) => (t === 'verb.aspect' ? 'verb.aspect.pair' : t)));
-    for (const tag of tags) {
+    const bump = (tag: string, good: number) => {
       let s = acc.get(tag);
       if (!s) acc.set(tag, (s = { n: 0, k: 0, rn: 0, rk: 0, on: 0, ok: 0 }));
       s.n++;
-      s.k += ok;
+      s.k += good;
       if (a.ts >= recentFrom) {
         s.rn++;
-        s.rk += ok;
+        s.rk += good;
       } else {
         s.on++;
-        s.ok += ok;
+        s.ok += good;
       }
-    }
+    };
+    // A5: legacy attempts tagged "verb.aspect" are read as the aspect-pair tag.
+    const tags = new Set(a.tags.map((t) => (t === 'verb.aspect' ? 'verb.aspect.pair' : t)));
+    for (const tag of tags) bump(tag, ok);
+    // B5: typed-accent answers also count for phon.stress (accent position decides the score there).
+    if (a.stressOk !== undefined) bump('phon.stress', a.stressOk ? 1 : 0);
   }
   const out = new Map<string, TagStat>();
   for (const [tag, s] of acc) {

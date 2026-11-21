@@ -398,6 +398,7 @@ export async function recordAttempt(input: RecordInput): Promise<Attempt> {
     prompt: graded.prompt, expected: graded.expected,
   };
   if (graded.confusion) attempt.confusion = graded.confusion;
+  if (graded.stressOk !== undefined) attempt.stressOk = graded.stressOk;
   await db.transaction('rw', db.attempts, db.cards, async () => {
     attempt.id = await db.attempts.add(attempt);
     const existing = await db.cards.get(q.itemId);
@@ -418,7 +419,7 @@ export async function recordAttempt(input: RecordInput): Promise<Attempt> {
 /** Register a validated fill-in item (T4). */
 export async function addT4Item(payload: T4Payload, lemma: LemmaRow, source: 'ai' | 'user', now = Date.now()): Promise<ItemRow> {
   const all = await db.items.toArray();
-  const dup = all.find((i) => i.payload.sentence_ru === payload.sentence_ru && i.payload.lemmaId === payload.lemmaId);
+  const dup = all.find((i) => i.payload.sentence_ru === payload.sentence_ru && i.payload.lemmaId === payload.lemmaId && i.payload.feat === payload.feat);
   if (dup) return dup;
   const next = all.reduce((m, i) => Math.max(m, Number(i.id.slice(3)) || 0), 0) + 1;
   const row: ItemRow = {
