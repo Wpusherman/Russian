@@ -72,7 +72,11 @@ async function loadDict(onProgress: (p: DictProgress) => void): Promise<void> {
   let hash = '';
   try {
     const res = await fetch(`${base}dict/dict.meta.json`, { cache: 'no-cache' });
-    if (res.ok) hash = String(((await res.json()) as { hash?: string }).hash ?? '');
+    if (res.ok) {
+      const meta = (await res.json()) as { hash?: string; spellExceptions?: string[] };
+      hash = String(meta.hash ?? '');
+      if (Array.isArray(meta.spellExceptions)) await setSetting('spellExceptions', meta.spellExceptions);
+    }
   } catch {
     hash = '';
   }

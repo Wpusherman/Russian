@@ -65,6 +65,7 @@
 - 同表記の辞書語が複数あるときは登録前に候補（id と訳）を選ばせ、choices で lemmaId を指定して登録する。未指定なら頻度順位が最小の1件。
 - 動詞の訳語には体のバッジ（impf〔不完〕/pf〔完〕/both〔両体〕）を付け、結果画面にペアを1行表示する。T1の誤答肢からは partnerIds と同一表示訳を除き、T2ではペアの表示訳が同一なら（過程・反復）/（1回・完了）を添える。
 - classify は wrong_form の直後に wrong_aspect を判定する（T2は相手の不定形、T3/T4は同じ FeatKey の形）。評価は Again、タグは verb.aspect.pair、confusion には体を記録する。
+- spellExceptions は build-dict が dict.meta.json に出し、起動時に settings.spellExceptions へ読み込む。送信後は常に解答の違反2文字に赤波線と規則名を出し、送信前は liveWarnings が true のときだけ入力欄背面に下線を出す（既存の spelling_rule 判定は変更しない）。
 - 見出し語が ся/сь で終わる動詞の全T3に verb.reflexive を付け（U4の練習タグ、解放条件の対象外）、解答が接尾辞を落としていれば reflexive_drop（Again）とする。
 - liveWarnings（初期値 false）が true のときだけ、送信前に -ся/-сь の脱落確認を出し、確認して送信した解答は hintCount+1 とする。
 - alt を持つ動詞の pres.* に verb.pres.alt を付け（scope 1sg は pres.1sg のみ）、U4 の練習タグに加えるが単元の解放条件には含めない。

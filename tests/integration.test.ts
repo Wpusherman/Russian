@@ -624,5 +624,6 @@ describe('alternation card state (B1)', () => {
 describe('settings (B2)', () => {
   it('liveWarnings defaults to off', async () => {
     expect((await loadSettings()).liveWarnings).toBe(false);
+    expect((await loadSettings()).spellExceptions).toEqual([]);
   });
 });

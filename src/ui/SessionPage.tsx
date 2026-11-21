@@ -3,7 +3,8 @@ import { cachedExplain, runExplain } from '../ai/tasks';
 import { CLASS_JA, isCorrectClass, ratingFor, reflexiveWarning } from '../core/classify';
 import { grade, hintText, isUncertainGloss, targetLabel, type Answer, type Graded, type Question } from '../core/grade';
 import { isVowel, normalize } from '../core/normalize';
-import { aspectBadge, confusionLabelJa, featLabelJa } from '../core/tags';
+import { spellingViolations } from '../core/spelling';
+import { aspectBadge, confusionLabelJa, featLabelJa, tagLabelJa } from '../core/tags';
 import type { AnswerClass, RatingNum } from '../core/types';
 import type { Settings } from '../db/settings';
 import { buildSession, loadContext, recordAttempt } from '../db/study';
@@ -177,7 +178,8 @@ function QuestionView(props: {
       <div>
         <RuInput key={q.itemId} value={text} onChange={setText} autoFocus disabled={answered || pending !== null}
           defaultMode={settings.inputMode} showKeyboardDefault={settings.showKeyboard}
-          onEnter={submitText} />
+          onEnter={submitText}
+          violations={settings.liveWarnings ? (t) => spellingViolations(t, settings.spellExceptions) : undefined} />
         {pending !== null && (
           <div className="box warn">
             <p>-ся / -сь が抜けています（母音の後は -сь）。このまま送信しますか？</p>
@@ -244,8 +246,23 @@ function AltCard({ q }: { q: Question }): ReactNode {
   );
 }
 
+function MarkedAnswer({ text, exceptions }: { text: string; exceptions: readonly string[] }): ReactNode {
+  const marks = spellingViolations(text, exceptions);
+  if (marks.length === 0) return <>{text || '（空欄）'}</>;
+  const out: ReactNode[] = [];
+  let pos = 0;
+  marks.forEach((m, i) => {
+    if (m.start > pos) out.push(<span key={`t${i}`}>{text.slice(pos, m.start)}</span>);
+    out.push(<span key={`m${i}`} className="spell-bad">{text.slice(m.start, m.end)}</span>);
+    pos = Math.max(pos, m.end);
+  });
+  if (pos < text.length) out.push(<span key="tail">{text.slice(pos)}</span>);
+  return <>{out}</>;
+}
+
 function ResultView(props: {
   q: Question; result: Result; onRate: (r: RatingNum) => void; onNext: () => void; canSpeak: boolean; onSpeak: () => void;
+  spellExceptions: readonly string[];
 }): ReactNode {
   const { q, result } = props;
   const g = result.graded;
@@ -271,7 +288,15 @@ function ResultView(props: {
         {'hint' in q && q.hint && <span className="muted">（{q.hint}）</span>}
         {props.canSpeak && <button className="ghost small" tabIndex={-1} onClick={props.onSpeak}>🔊 <kbd>P</kbd></button>}
       </div>
-      {!ok && q.type !== 'T1' && <div>あなたの解答：<span className="ru">{g.given || '（空欄）'}</span></div>}
+      {q.type !== 'T1' && (
+        <div>
+          あなたの解答：<span className="ru"><MarkedAnswer text={g.given} exceptions={props.spellExceptions} /></span>
+          {(() => {
+            const tags = [...new Set(spellingViolations(g.given, props.spellExceptions).map((m) => m.tag))];
+            return tags.length > 0 ? <div className="confusion">{tags.map((t) => tagLabelJa(t)).join('・')}</div> : null;
+          })()}
+        </div>
+      )}
       {g.class === 'wrong_aspect' && <div className="confusion">{aspectMistake(q, g.given)}</div>}
       {g.class === 'reflexive_drop' && <div className="confusion">-ся / -сь が抜けています（母音の後は -сь）</div>}
       {(q.type === 'T2' || q.type === 'T3' || q.type === 'T4') && (q.partners?.length ?? 0) > 0 && (
@@ -461,6 +486,7 @@ export function SessionPage(): ReactNode {
         <QuestionView key={q.itemId} q={q} settings={settings} canSpeak={canSpeak} result={result} onAnswer={onAnswer} onSpeak={say} />
         {result && (
           <ResultView q={q} result={result} canSpeak={canSpeak} onSpeak={say}
+            spellExceptions={settings.spellExceptions}
             onRate={(r) => setResult({ ...result, rating: r })} onNext={() => void next()} />
         )}
       </div>

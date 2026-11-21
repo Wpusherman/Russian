@@ -41,6 +41,8 @@ type Props = {
   disabled?: boolean;
   autoFocus?: boolean;
   placeholder?: string;
+  /** B3: character ranges of `value` to underline (live spelling warnings). */
+  violations?: (text: string) => { start: number; end: number }[];
 };
 
 /** Split a (partly converted) value into its Cyrillic part and the pending Latin tail. */
@@ -119,11 +121,20 @@ export function RuInput(props: Props): ReactNode {
   };
 
   const { done, pending } = splitPending(value, mode);
+  const marks = props.violations?.(done) ?? [];
+  const mirror: ReactNode[] = [];
+  let markPos = 0;
+  marks.forEach((m, i) => {
+    if (m.start > markPos) mirror.push(<span key={`t${i}`}>{done.slice(markPos, m.start)}</span>);
+    mirror.push(<span key={`m${i}`} className="spell-bad">{done.slice(m.start, m.end)}</span>);
+    markPos = Math.max(markPos, m.end);
+  });
+  if (markPos < done.length) mirror.push(<span key="tail">{done.slice(markPos)}</span>);
   return (
     <div className="ru-input">
       <div className="ru-input-field">
         <div className="ru-input-mirror" aria-hidden="true">
-          <span>{done}</span>
+          {marks.length > 0 ? <>{mirror}</> : <span>{done}</span>}
           <span className="pending">{pending}</span>
         </div>
         <input

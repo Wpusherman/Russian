@@ -26,6 +26,8 @@ export type Settings = {
   glossJa: Record<string, string>;
   /** Grammar annotations (e.g. "+対") per lemma id, kept like glossJa. */
   hints: Record<string, string>;
+  /** Dictionary forms that legitimately contain a spelling-rule pattern (from dict.meta.json). */
+  spellExceptions: string[];
   /** Word-list words that are not in the dictionary. */
   userLemmas: LemmaRow[];
   seedVersion: number;
@@ -58,6 +60,7 @@ export const DEFAULTS: Settings = {
   lastAnalyzedAttemptId: 0,
   glossJa: {},
   hints: {},
+  spellExceptions: [],
   userLemmas: [],
   seedVersion: 0,
 };

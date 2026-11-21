@@ -200,3 +200,5 @@ table { border-collapse: collapse; }
 .alt-card b { color: var(--accent, #4a7); }
 
 .box.warn { border-color: var(--accent, #a70); background: rgba(170, 120, 0, 0.12); }
+
+.spell-bad { text-decoration: underline wavy #e5484d; text-decoration-thickness: 2px; text-underline-offset: 4px; }

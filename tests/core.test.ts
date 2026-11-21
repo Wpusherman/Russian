@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CLASS_JA, classify, damerauLevenshtein, ratingFor, reflexiveWarning } from '../src/core/classify';
 import { aspectNote, isUncertainGloss } from '../src/core/grade';
 import { normalize } from '../src/core/normalize';
+import { spellingViolations } from '../src/core/spelling';
 import { confusionCounts, DAY_MS, tagStats, wilsonLB } from '../src/core/stats';
 import { ASPECT_FEAT, aspectBadge, expandTagPattern, tagsForFeat, verbConjType, confusionLabelJa } from '../src/core/tags';
 import { TRANSLIT_TABLE, translit, translitLive } from '../src/core/translit';
@@ -326,6 +327,28 @@ describe('aspect tag split (A5)', () => {
     const stats = tagStats([{ ts: now, class: 'correct', tags: ['verb.aspect'] }], now);
     expect(stats.has('verb.aspect')).toBe(false);
     expect(stats.get('verb.aspect.pair')).toMatchObject({ n: 1, k: 1 });
+  });
+});
+
+describe('spelling violations (B3)', () => {
+  it('marks the two offending letters for both rules', () => {
+    expect(spellingViolations('жызнь')).toEqual([{ start: 0, end: 2, tag: 'spell.y_i' }]);
+    expect(spellingViolations('чяй')).toEqual([{ start: 0, end: 2, tag: 'spell.a_ya' }]);
+    expect(spellingViolations('щюка')).toEqual([{ start: 0, end: 2, tag: 'spell.a_ya' }]);
+    expect(spellingViolations('ЖЫ')).toEqual([{ start: 0, end: 2, tag: 'spell.y_i' }]);
+  });
+  it('does not flag correct spellings and skips dictionary exceptions', () => {
+    expect(spellingViolations('жить')).toEqual([]);
+    expect(spellingViolations('чаща')).toEqual([]);
+    expect(spellingViolations('жюри')).toEqual([{ start: 0, end: 2, tag: 'spell.a_ya' }]);
+    expect(spellingViolations('жюри', ['жюри'])).toEqual([]);
+    expect(spellingViolations('парашю́т', ['парашют'])).toEqual([]);
+  });
+  it('reports every offending range in order', () => {
+    expect(spellingViolations('жы и чяй')).toEqual([
+      { start: 0, end: 2, tag: 'spell.y_i' },
+      { start: 5, end: 7, tag: 'spell.a_ya' },
+    ]);
   });
 });
 
