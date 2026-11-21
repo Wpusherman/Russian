@@ -193,6 +193,13 @@ describe('word lists (M4)', () => {
     const list = (await db.wordlists.toArray())[0]!;
     expect(list.entries[0]!.lemmaId).toBe('n-лампа~2');
   });
+  it('uses the other phrases of the list as T1 distractors (W4)', async () => {
+    await createWordlist('phrases', 'сесть на +対\t乗る\nвстать с +生\t起きる\nидти в +対\t行く\nприйти из +生\t来る');
+    const q = await buildQuestion({ itemId: 'T1:u-сесть_на', type: 'T1', lemmaId: 'u-сесть_на', slot: 'new' }, rngFrom(1));
+    if (q?.type !== 'T1') throw new Error('expected T1');
+    expect(q.options[q.correct]).toBe('乗る');
+    expect(q.options.filter((o) => o !== '乗る').sort()).toEqual(['来る', '行く', '起きる'].sort());
+  });
   it('reports words that have no translation and therefore are never asked (W5)', async () => {
     const r = await createWordlist('mixed', 'привет\nкнига\t本\nпока');
     expect(r.created).toBe(2);

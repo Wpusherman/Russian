@@ -162,6 +162,24 @@ async function distractors(lemma: LemmaRow, rng: () => number): Promise<string[]
   return out.slice(0, 3);
 }
 
+/** Other user words / phrases from the same word list(s): preferred T1 distractors for a phrase. */
+async function phraseDistractors(lemma: LemmaRow, rng: () => number): Promise<string[]> {
+  if (!lemma.user && !/\s/.test(lemma.bare)) return [];
+  const lists = await db.wordlists.toArray();
+  const ids = [...new Set(lists.filter((l) => l.entries.some((e) => e.lemmaId === lemma.id)).flatMap((l) => l.entries.map((e) => e.lemmaId)))];
+  if (ids.length === 0) return [];
+  const rows = await db.lemmas.bulkGet(ids);
+  const own = glossOf(lemma);
+  const out: string[] = [];
+  for (const r of shuffle(rows.filter((x): x is LemmaRow => !!x), rng)) {
+    if (r.id === lemma.id || (!r.user && !/\s/.test(r.bare))) continue;
+    const g = glossOf(r);
+    if (g && g !== own && !out.includes(g)) out.push(g);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 /** Turn a planned item into a displayable question. Returns null when its data no longer exists. */
 export async function buildQuestion(p: PlannedItem, rng: () => number = Math.random): Promise<Question | null> {
   const { type, ref, feat } = parseItemId(p.itemId);
@@ -190,7 +208,10 @@ export async function buildQuestion(p: PlannedItem, rng: () => number = Math.ran
   switch (type) {
     case 'T1': {
       if (!gloss) return null;
-      const options = shuffle([gloss, ...(await distractors(lemma, rng))], rng);
+      const phrase = await phraseDistractors(lemma, rng);
+      const filler = phrase.length >= 3 ? [] : await distractors(lemma, rng);
+      const wrong = [...new Set([...phrase, ...filler])].filter((g) => g !== gloss).slice(0, 3);
+      const options = shuffle([gloss, ...wrong], rng);
       return { ...base, type: 'T1', tags: vocabTags(lemma), lemma, hint: lemma.hint, options, correct: options.indexOf(gloss) };
     }
     case 'T2':
