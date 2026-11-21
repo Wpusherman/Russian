@@ -45,7 +45,7 @@
 - 分析バナーの「7日経過」は前回の分析（未実施なら最初の解答）からの経過で、未分析の解答が1件以上あるときだけ強調する。
 - `aiUsage` はHTTPリクエスト1回ごとに数える（再試行も1回）。Manualモードは数えない。
 - タグの重みは最新の分析のものだけが有効（14日で失効）。
-- analyze の入力に app_features（prompts.ts の APP_FEATURES、1件30字以内・最大40件）を追加し、feature_requests は app_features・backlog_titles と重複させない。
+- analyze の入力に app_features（prompts.ts の APP_FEATURES、1件30字以内・最大40件）と backlog_titles（全 status のタイトル最大30件）を追加し、feature_requests は重複禁止・解答送信前のヒント禁止・evidence は samples の実在誤答のみ引用と指示する。
 - `glossJa` とユーザー語は `settings` にも保存する（辞書の再ビルド・エクスポート／インポートで失われないようにするため）。
 - 文法ノートのMarkdownは自前の最小レンダラ（見出し・箇条書き・表・強調）で表示する。HTMLは解釈しない。
 - 文法ノートの本文が改行なしの1行で返ることがある（実APIで確認）ので、プロンプトで改行を明示し、それでも1行なら1回だけ再生成し、だめなら見出しと表の行だけ機械的に改行を補う。

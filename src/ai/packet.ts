@@ -9,6 +9,7 @@ export type AnalyzePacket = {
   samples: { type: string; prompt: string; expected: string; given: string; class: string }[];
   current_weights: { tag: string; w: number }[];
   app_features: string[];
+  backlog_titles: string[];
 };
 
 export const PACKET_MAX_CHARS = 6000;
@@ -20,6 +21,8 @@ export type PacketInput = {
   attempts: Attempt[];
   stats: ReadonlyMap<string, TagStat>;
   weights: Readonly<Record<string, number>>;
+  /** Titles of every app-backlog row ('new' and 'exported'), newest first. */
+  backlogTitles?: readonly string[];
 };
 
 /** Spec 12.2: aggregated stats only; shrinks `samples` until the JSON fits in ~1500 tokens (6000 chars). */
@@ -50,6 +53,7 @@ export function buildAnalyzePacket(input: PacketInput): AnalyzePacket {
     tag_stats, confusions, samples,
     current_weights: Object.entries(input.weights).map(([tag, w]) => ({ tag, w })),
     app_features: APP_FEATURES,
+    backlog_titles: [...(input.backlogTitles ?? [])].slice(0, 30),
   };
   while (JSON.stringify(packet).length > PACKET_MAX_CHARS && packet.samples.length > 0) packet.samples.pop();
   return packet;

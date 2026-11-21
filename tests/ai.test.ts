@@ -203,6 +203,8 @@ describe('APP_FEATURES', () => {
     expect(new Set(APP_FEATURES).size).toBe(APP_FEATURES.length);
     expect(SYSTEM_PROMPTS.analyze).toContain('app_features');
     expect(SYSTEM_PROMPTS.analyze).toContain('重複させない');
+    expect(SYSTEM_PROMPTS.analyze).toContain('samples に実在する誤答');
+    expect(SYSTEM_PROMPTS.analyze).toContain('解答送信前に正解の手がかり');
   });
 });
 
@@ -234,7 +236,14 @@ describe('buildAnalyzePacket', () => {
     expect(packet.samples[0]!.expected).toBe('книге'); // no stress marks
     expect(packet.current_weights).toEqual([{ tag: 'noun.prep.sg', w: 1.5 }]);
     expect(packet.app_features).toEqual(APP_FEATURES);
+    expect(packet.backlog_titles).toEqual([]);
     expect(JSON.stringify(packet).length).toBeLessThanOrEqual(PACKET_MAX_CHARS);
+  });
+  it('includes at most 30 backlog titles', () => {
+    const titles = Array.from({ length: 40 }, (_, i) => `提案${i}`);
+    const p = buildAnalyzePacket({ now, unitId: 'U5', attempts: [], stats: new Map(), weights: {}, backlogTitles: titles });
+    expect(p.backlog_titles).toHaveLength(30);
+    expect(p.backlog_titles[0]).toBe('提案0');
   });
   it('drops samples until it fits', () => {
     const long = attempts.map((a) => ({ ...a, prompt: 'п'.repeat(80), expected: 'о'.repeat(80), given: 'д'.repeat(80) }));

@@ -127,10 +127,6 @@ FEATURE_BACKLOG.md の「動詞活用形入力時のリアルタイム語幹変�
 - Translit・OSキーボードの両モードで、母音の直後に `=` を入力すると、その母音に U+0301 を付ける（`=` 自体は消える）。
 - T2・T3 で解答にアクセント記号が含まれていた場合のみ、位置の正誤を結果画面に別に表示し、attempts.stressOk に記録する。評価には影響させない。stats では、stressOk を持つ解答を phon.stress の解答としても集計する。
 
-### analyze改善
-- 入力パケットに backlog_titles（既存バックログのタイトル、最大30件）を追加する。
-- system_instruction に次の文を追記する:「feature_requests は backlog_titles と重複させない。解答送信前に正解の手がかりを出す機能は提案しない（必要な場合はヒント扱いと明記する）。evidence には、入力の samples に実在する誤答だけを引用する。」
-
 ## その他
 動詞の体（完了体/不完了体）の区別を実装する。順序は A1→A2→A3→A4→A5。質問はせず、細部は DECISIONS.md に1行で追記。各項目に vitest を追加。
 

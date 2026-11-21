@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AIProvider } from '../src/ai/provider';
 import type { AnalyzeOutput } from '../src/ai/schemas';
-import { backlogMarkdown, importAnalysis, restoreLineBreaks, runExplain, runGloss, runNote } from '../src/ai/tasks';
+import { backlogMarkdown, importAnalysis, restoreLineBreaks, runAnalyze, runExplain, runGloss, runNote } from '../src/ai/tasks';
 import { UNITS } from '../src/content/units';
 import { ratingFor } from '../src/core/classify';
 import { grade, isUncertainGloss, type Answer, type Question } from '../src/core/grade';
@@ -394,5 +394,24 @@ describe('backlog lifecycle (P1)', () => {
 
     expect(await syncAppVersion('1.0.2')).toBe(0); // same version: nothing happens
     expect(await db.backlog.count()).toBe(1);
+  });
+});
+
+
+describe('analyze packet backlog titles (P3)', () => {
+  it("sends every backlog title, including already exported rows", async () => {
+    await db.backlog.bulkAdd([
+      { ts: 1, status: 'new', title: '新規提案', rationale: 'r', spec: 's' },
+      { ts: 2, status: 'exported', title: '書き出し済み', rationale: 'r', spec: 's' },
+    ]);
+    let packet: { backlog_titles: string[] } | null = null;
+    const provider: AIProvider = {
+      run: async <T>(_task: string, input: unknown) => {
+        packet = input as { backlog_titles: string[] };
+        return { diagnosis: [], tag_weights: [], new_items: [], tips_ja: '', feature_requests: [] } as T;
+      },
+    };
+    await runAnalyze(provider, await loadContext(Date.now()));
+    expect(packet!.backlog_titles.sort()).toEqual(['新規提案', '書き出し済み']);
   });
 });

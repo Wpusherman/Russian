@@ -82,7 +82,11 @@ export async function importAnalysis(out: AnalyzeOutput, ctx: Pick<StudyContext,
 }
 
 export async function runAnalyze(provider: AIProvider, ctx: StudyContext): Promise<AnalysisImport> {
-  const packet = buildAnalyzePacket({ now: ctx.now, unitId: ctx.current.id, attempts: ctx.attempts, stats: ctx.stats, weights: ctx.weights });
+  const backlog = await db.backlog.orderBy('id').reverse().toArray();
+  const packet = buildAnalyzePacket({
+    now: ctx.now, unitId: ctx.current.id, attempts: ctx.attempts, stats: ctx.stats, weights: ctx.weights,
+    backlogTitles: backlog.map((r) => r.title),
+  });
   const out = await provider.run<AnalyzeOutput>('analyze', packet, analyzeJsonSchema);
   return importAnalysis(out, ctx, Date.now());
 }
