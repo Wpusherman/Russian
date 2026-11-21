@@ -627,3 +627,35 @@ describe('settings (B2)', () => {
     expect((await loadSettings()).spellExceptions).toEqual([]);
   });
 });
+
+
+describe('T9 adjective agreement (B4)', () => {
+  const novyy: Lemma = {
+    id: 'a-новый', bare: 'новый', accented: 'но́вый', pos: 'adj', rank: 10, level: 'A1', glossEn: ['new'],
+    forms: { 'adj.nom.m': f('но́вый'), 'adj.nom.pl': f('но́вые'), 'adj.gen.pl': f('но́вых') },
+  };
+
+  it('builds a T9 question from the adjective and the matching noun form', async () => {
+    await db.lemmas.put(toRow(novyy));
+    const q = await buildQuestion({ itemId: 'T9:a-новый:n-книга:adj.nom.pl', type: 'T9', lemmaId: 'a-новый', slot: 'weak' });
+    if (q?.type !== 'T9') throw new Error('expected T9');
+    expect(q.expected.primary).toBe('но́вые');
+    expect(q.noun.bare).toBe('книга');
+    expect(q.nounForm.primary).toBe((await db.lemmas.get('n-книга'))!.forms['case.nom.pl']!.primary);
+    expect(q.tags).toEqual(['adj.nom.pl']);
+    expect(grade(q, { kind: 'text', text: 'новые' }, { yoLenient: true }).class).toBe('correct');
+    expect(grade(q, { kind: 'text', text: 'новый' }, { yoLenient: true })).toMatchObject({
+      class: 'wrong_form', confusion: { expected: 'adj.nom.pl', given: 'adj.nom.m' },
+    });
+  });
+
+  it('starts a focused session with T9 items for an adjective tag', async () => {
+    await db.lemmas.put(toRow(novyy));
+    await db.unitState.put({ unitId: 'U7', unlocked: true });
+    const qs = await buildSession(await loadContext(Date.now()), { ttsAvailable: false, rng: rngFrom(2), focusTag: 'adj.nom.pl' });
+    expect(qs.length).toBeGreaterThanOrEqual(2);
+    expect(qs[0]!.type).toBe('T9');
+    expect(qs.every((q) => q.tags.includes('adj.nom.pl'))).toBe(true);
+    expect(qs.length).toBeLessThanOrEqual(20);
+  });
+});

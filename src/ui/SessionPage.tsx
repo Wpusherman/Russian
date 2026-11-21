@@ -8,13 +8,13 @@ import { aspectBadge, confusionLabelJa, featLabelJa, tagLabelJa } from '../core/
 import type { AnswerClass, RatingNum } from '../core/types';
 import type { Settings } from '../db/settings';
 import { buildSession, loadContext, recordAttempt } from '../db/study';
-import { AiErrorBox, navigate, pct, useAiTask, useAsync } from './common';
+import { AiErrorBox, navigate, pct, useAiTask, useAsync, useHashRoute } from './common';
 import { RuInput } from './RuInput';
 import { speak, useRuVoices } from './speech';
 
 const RATING_JA: Record<RatingNum, string> = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy' };
 const TYPE_JA: Record<Question['type'], string> = {
-  T1: '意味認識', T2: '綴り想起', T3: '語形ドリル', T4: '穴埋め', T5: 'アクセント', T6: 'ディクテーション', T10: '体の選択', T11: '数詞',
+  T1: '意味認識', T2: '綴り想起', T3: '語形ドリル', T4: '穴埋め', T5: 'アクセント', T6: 'ディクテーション', T9: '形容詞の一致', T10: '体の選択', T11: '数詞',
 };
 
 type Done = { question: Question; graded: Graded; rating: RatingNum };
@@ -31,6 +31,7 @@ function speechText(q: Question): string {
     case 'T6': return q.sentence;
     case 'T4': return q.sentence.replace('___', q.expected.primary);
     case 'T10': return q.sentence.replace('___', q.expected.primary);
+    case 'T9': return q.expected.primary;
     case 'T3': return q.expected.primary;
     case 'T11': return q.expected.primary;
     default: return q.lemma.accented;
@@ -76,6 +77,14 @@ function Prompt({ q, onSpeak, canSpeak }: { q: Question; onSpeak: () => void; ca
       );
     case 'T5':
       return <div className="prompt"><div className="muted">{q.gloss}</div><p className="muted">アクセントのある母音をクリック（または数字キー）</p></div>;
+    case 'T9':
+      return (
+        <div className="prompt">
+          <div className="ru big-word">{q.adjective.bare} ___ {q.nounForm.primary}</div>
+          <div className="muted">（{q.noun.bare}）</div>
+          <div className="target">→ {featLabelJa(q.feat)}：名詞に合わせた形容詞の形</div>
+        </div>
+      );
     case 'T10':
       return (
         <div className="prompt">
@@ -389,6 +398,8 @@ function Summary({ done }: { done: Done[] }): ReactNode {
 
 export function SessionPage(): ReactNode {
   const voices = useRuVoices();
+  const route = useHashRoute();
+  const focusTag = useMemo(() => new URLSearchParams(route.split('?')[1] ?? '').get('tag'), [route]);
   const canSpeak = voices.length > 0;
   const voicesRef = useRef(canSpeak);
   voicesRef.current = canSpeak;
@@ -396,9 +407,9 @@ export function SessionPage(): ReactNode {
     // Give the browser a moment to load its voice list so dictation is only planned when audio exists.
     if (!voicesRef.current) await new Promise((r) => setTimeout(r, 300));
     const ctx = await loadContext();
-    const questions = await buildSession(ctx, { ttsAvailable: voicesRef.current });
+    const questions = await buildSession(ctx, { ttsAvailable: voicesRef.current, focusTag: focusTag ?? undefined });
     return { settings: ctx.settings, questions };
-  }, []);
+  }, [focusTag]);
   const [index, setIndex] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
   const [done, setDone] = useState<Done[]>([]);
@@ -480,6 +491,7 @@ export function SessionPage(): ReactNode {
         <div className="progress"><div style={{ width: `${(index / total) * 100}%` }} /></div>
         <span>{index + 1} / {total}</span>
         <span className="tag">{TYPE_JA[q.type]}</span>
+        {focusTag && <span className="tag">{tagLabelJa(focusTag)}の集中練習</span>}
         <button className="ghost small" tabIndex={-1} onClick={() => navigate('home')}>中断</button>
       </div>
       <div className="card question">

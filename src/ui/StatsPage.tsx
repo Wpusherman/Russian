@@ -3,7 +3,7 @@ import { confusionCounts, dailyCounts, streakDays, type TagStat } from '../core/
 import { CASE_JA, NUM_JA, confusionLabelJa, tagLabelJa } from '../core/tags';
 import { CASES, NUMBERS } from '../core/types';
 import { loadContext } from '../db/study';
-import { lbColor, pct, useAsync } from './common';
+import { lbColor, navigate, pct, useAsync } from './common';
 
 type SortKey = 'tag' | 'n' | 'acc' | 'lb' | 'trend' | 'w';
 
@@ -94,7 +94,7 @@ export function StatsPage(): ReactNode {
         <h2>タグ別（直近30日）</h2>
         {rows.length === 0 ? <p className="muted">まだデータがありません。</p> : (
           <table className="table">
-            <thead><tr>{th('tag', '項目')}{th('n', '解答数')}{th('acc', '正答率')}{th('lb', 'LB')}{th('trend', '傾向')}{th('w', 'AIの重み')}</tr></thead>
+            <thead><tr>{th('tag', '項目')}{th('n', '解答数')}{th('acc', '正答率')}{th('lb', 'LB')}{th('trend', '傾向')}{th('w', 'AIの重み')}<th /></tr></thead>
             <tbody>
               {rows.map((s) => (
                 <tr key={s.tag}>
@@ -103,6 +103,7 @@ export function StatsPage(): ReactNode {
                   <td><span className="lb" style={{ background: lbColor(s.lb) }}>{pct(s.lb)}</span></td>
                   <td>{s.trend === 0 ? '—' : `${s.trend > 0 ? '+' : ''}${Math.round(s.trend * 100)}pt`}</td>
                   <td>{w(s.tag) === 1 ? '—' : `×${w(s.tag)}`}</td>
+                  <td><button className="small" onClick={() => navigate(`session?tag=${encodeURIComponent(s.tag)}`)}>集中練習</button></td>
                 </tr>
               ))}
             </tbody>

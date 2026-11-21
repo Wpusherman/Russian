@@ -141,7 +141,8 @@ export function App(): ReactNode {
     );
   }
 
-  const [page, arg] = route.split('/');
+  const [rawPage, arg] = route.split('/');
+  const page = rawPage.split('?')[0]!;
   let body: ReactNode;
   switch (page) {
     case 'session': body = <SessionPage />; break;

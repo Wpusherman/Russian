@@ -4,7 +4,7 @@ import { aspectNote, fillBlank, glossOf, stressInfo, type Graded, type Question 
 import { isNumeralEligible, numeralExpected, T11_NUMBERS } from '../core/numeral';
 import { newFsrs, retrievability, review, STATE_REVIEW } from '../core/scheduler';
 import {
-  buildGenerator, itemIdT1, itemIdT2, itemIdT11, parseItemId, planSession, stressable, vocabTags,
+  buildGenerator, itemIdT1, itemIdT2, itemIdT11, itemIdT9, parseItemId, planSession, stressable, vocabTags,
   type ExtraItem, type PlannedItem, type SessionCard,
 } from '../core/session';
 import { startOfDay, tagStats, type TagStat } from '../core/stats';
@@ -191,7 +191,8 @@ async function partnersOf(lemma: LemmaRow): Promise<LemmaRow[]> {
 
 /** Turn a planned item into a displayable question. Returns null when its data no longer exists. */
 export async function buildQuestion(p: PlannedItem, rng: () => number = Math.random): Promise<Question | null> {
-  const { type, ref, feat } = parseItemId(p.itemId);
+  const parsed = parseItemId(p.itemId);
+  const { type, ref, feat } = parsed;
   if (type === 'T4' || type === 'T6' || type === 'T10') {
     const item = await db.items.get(type === 'T6' ? `T4:${ref}` : p.itemId);
     if (!item) return null;
@@ -254,6 +255,18 @@ export async function buildQuestion(p: PlannedItem, rng: () => number = Math.ran
       if (!stressable(lemma)) return null;
       return { ...base, type: 'T5', tags: ['phon.stress'], lemma, gloss, ...stressInfo(lemma.accented) };
     }
+    case 'T9': {
+      const noun = parsed.nounId ? await db.lemmas.get(parsed.nounId) : null;
+      const expected = feat ? expectedForm(lemma, feat) : null;
+      if (!noun || !feat || !expected) return null;
+      const [, c, g] = feat.split('.');
+      const nounForm = noun.forms[g === 'pl' ? `case.${c}.pl` : `case.${c}.sg`];
+      if (!nounForm) return null;
+      return {
+        type: 'T9', itemId: p.itemId, lemmaId: lemma.id, tags: tagsForFeat(lemma, feat),
+        adjective: lemma, noun, nounForm, feat, expected,
+      };
+    }
     case 'T11': {
       const n = Number(feat);
       const expected = Number.isFinite(n) ? numeralExpected(lemma, n) : null;
@@ -275,7 +288,7 @@ export function orderNewForU4(ids: readonly string[], byId: ReadonlyMap<string, 
 }
 
 /** Plan a session (spec section 10) and materialise its questions. */
-export async function buildSession(ctx: StudyContext, opts: { ttsAvailable: boolean; rng?: () => number }): Promise<Question[]> {
+export async function buildSession(ctx: StudyContext, opts: { ttsAvailable: boolean; rng?: () => number; focusTag?: string }): Promise<Question[]> {
   const rng = opts.rng ?? Math.random;
   const now = ctx.now;
   const usable = ctx.cards.filter((c) => opts.ttsAvailable || c.type !== 'T6');
@@ -287,8 +300,9 @@ export async function buildSession(ctx: StudyContext, opts: { ttsAvailable: bool
   const t1Correct = new Set(ctx.cards.filter((c) => c.type === 'T2').map((c) => c.lemmaId));
   const reviewIds = ctx.cards.filter((c) => c.type === 'T1' && c.state === STATE_REVIEW).map((c) => c.lemmaId);
   const preferred = new Set(reviewIds);
-  const [reviewLemmas, a1, items, newQueue] = await Promise.all([
-    db.lemmas.bulkGet(reviewIds), db.lemmas.where('level').equals('A1').toArray(), db.items.toArray(), newLemmaQueue(ctx.cards),
+  const [reviewLemmas, a1, a2, items, newQueue] = await Promise.all([
+    db.lemmas.bulkGet(reviewIds), db.lemmas.where('level').equals('A1').toArray(),
+    db.lemmas.where('level').equals('A2').toArray(), db.items.toArray(), newLemmaQueue(ctx.cards),
   ]);
   let newIds = newQueue;
   if (ctx.current.id === 'U4') {
@@ -308,23 +322,62 @@ export async function buildSession(ctx: StudyContext, opts: { ttsAvailable: bool
     .filter((it) => !hasCard.has(it.id))
     .filter((it) => it.tags.filter((t) => !t.startsWith('spell.')).every((t) => unlockedSet.has(t)))
     .map((it) => ({ item: { itemId: it.id, type: it.type, lemmaId: it.payload.lemmaId, slot: 'weak' }, tags: it.tags }));
+  const a12 = [...a1, ...a2];
   // T11 numeral items are generated locally (no AI): a few numbers for a sample of A1-A2 nouns.
-  const [a1nouns, a2nouns] = await Promise.all([
-    db.lemmas.where('level').equals('A1').toArray(), db.lemmas.where('level').equals('A2').toArray(),
-  ]);
-  for (const lemma of shuffle([...a1nouns, ...a2nouns].filter(isNumeralEligible), rng).slice(0, 40)) {
+  for (const lemma of shuffle(a12.filter(isNumeralEligible), rng).slice(0, 40)) {
     const nums = shuffle(T11_NUMBERS.filter((n) => numeralExpected(lemma, n)), rng).slice(0, 3);
     for (const n of nums) {
       extra.push({ item: { itemId: itemIdT11(lemma.id, n), type: 'T11', lemmaId: lemma.id, slot: 'weak' }, tags: ['num.gov'] });
     }
   }
 
-  const plan = planSession({
-    now, sessionSize: ctx.settings.sessionSize, cards, shownToday, tagStats: ctx.stats,
-    unlockedTags: tagsUnlocked, currentUnitTags: ctx.current.tags, tagWeights: ctx.weights,
-    newLemmaIds: newIds, newRemainingToday: ctx.newRemainingToday,
-    generate: buildGenerator([...pool.values()], preferred, t1Correct, rng, extra, unlockedSet), rng,
-  });
+  // B4: T9 adjective-agreement items for every unlocked adj.<case>.<gender> tag.
+  const adjRows = a12.filter((l) => l.pos === 'adj');
+  const nounRows = a12.filter((l) => l.pos === 'noun');
+  let t9Count = 0;
+  for (const tag of shuffle([...unlockedSet].filter((t) => /^adj\.(nom|gen|dat|acc|ins|prep)\.(m|f|n|pl)$/.test(t)), rng)) {
+    if (t9Count >= 80) break;
+    const [, c, g] = tag.split('.');
+    const feat = `adj.${c}.${g}`;
+    const nouns = nounRows.filter((n) => (g === 'pl' ? !!n.forms[`case.${c}.pl`] : n.gender === g && !!n.forms[`case.${c}.sg`]));
+    if (nouns.length === 0) continue;
+    for (const adj of shuffle(adjRows.filter((l) => !!l.forms[feat]), rng).slice(0, 4)) {
+      if (t9Count >= 80) break;
+      const noun = nouns[Math.floor(rng() * nouns.length)]!;
+      extra.push({ item: { itemId: itemIdT9(adj.id, noun.id, feat), type: 'T9', lemmaId: adj.id, slot: 'weak' }, tags: tagsForFeat(adj, feat) });
+      t9Count++;
+    }
+  }
+
+  const generate = buildGenerator([...pool.values()], preferred, t1Correct, rng, extra, unlockedSet);
+  let plan: PlannedItem[];
+  if (opts.focusTag) {
+    const tag = opts.focusTag;
+    const focus: PlannedItem[] = [];
+    const takenFocus = new Set<string>();
+    if (tag.startsWith('adj.')) {
+      // T9 is preferred for adjective tags (B4).
+      for (const it of shuffle(extra.filter((e) => e.item.type === 'T9' && e.tags.includes(tag)).map((e) => e.item), rng)) {
+        if (focus.length >= ctx.settings.sessionSize) break;
+        focus.push(it);
+        takenFocus.add(it.itemId);
+      }
+    }
+    while (focus.length < ctx.settings.sessionSize) {
+      const it = generate(tag, takenFocus);
+      if (!it) break;
+      takenFocus.add(it.itemId);
+      focus.push(it);
+    }
+    plan = focus;
+  } else {
+    plan = planSession({
+      now, sessionSize: ctx.settings.sessionSize, cards, shownToday, tagStats: ctx.stats,
+      unlockedTags: tagsUnlocked, currentUnitTags: ctx.current.tags, tagWeights: ctx.weights,
+      newLemmaIds: newIds, newRemainingToday: ctx.newRemainingToday,
+      generate, rng,
+    });
+  }
   const questions: Question[] = [];
   for (const p of plan) {
     const q = await buildQuestion(p, rng);

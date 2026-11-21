@@ -5,6 +5,7 @@ import { normalize } from '../src/core/normalize';
 import { spellingViolations } from '../src/core/spelling';
 import { confusionCounts, DAY_MS, tagStats, wilsonLB } from '../src/core/stats';
 import { ASPECT_FEAT, aspectBadge, expandTagPattern, tagsForFeat, verbConjType, confusionLabelJa } from '../src/core/tags';
+import { itemIdT9, parseItemId } from '../src/core/session';
 import { TRANSLIT_TABLE, translit, translitLive } from '../src/core/translit';
 import { mergeGloss, parseWordlistText } from '../src/core/wordlist';
 import type { Attempt, Form, Lemma } from '../src/core/types';
@@ -327,6 +328,17 @@ describe('aspect tag split (A5)', () => {
     const stats = tagStats([{ ts: now, class: 'correct', tags: ['verb.aspect'] }], now);
     expect(stats.has('verb.aspect')).toBe(false);
     expect(stats.get('verb.aspect.pair')).toMatchObject({ n: 1, k: 1 });
+  });
+});
+
+describe('adjective agreement item (B4)', () => {
+  it('encodes T9 item ids and uses an 8s speed threshold', () => {
+    expect(itemIdT9('a-новый', 'n-книга', 'adj.nom.pl')).toBe('T9:a-новый:n-книга:adj.nom.pl');
+    expect(parseItemId('T9:a-новый:n-книга:adj.nom.pl')).toEqual({
+      type: 'T9', ref: 'a-новый', nounId: 'n-книга', feat: 'adj.nom.pl',
+    });
+    expect(ratingFor({ class: 'correct', type: 'T9', hintUsed: false, latencyMs: 8000 })).toBe(3);
+    expect(ratingFor({ class: 'correct', type: 'T9', hintUsed: false, latencyMs: 8001 })).toBe(2);
   });
 });
 

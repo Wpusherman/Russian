@@ -17,8 +17,11 @@ export type QuestionT10 = Base & {
   type: 'T10'; lemma: Lemma; feat: FeatKey; sentence: string; translation: string; cue: string; impf: string; pf: string;
   expected: Form; partners?: Lemma[];
 };
+export type QuestionT9 = Base & {
+  type: 'T9'; adjective: Lemma; noun: Lemma; nounForm: Form; feat: FeatKey; expected: Form;
+};
 export type QuestionT11 = Base & { type: 'T11'; lemma: Lemma; num: number; expected: Form };
-export type Question = QuestionT1 | QuestionT2 | QuestionT3 | QuestionT4 | QuestionT5 | QuestionT6 | QuestionT10 | QuestionT11;
+export type Question = QuestionT1 | QuestionT2 | QuestionT3 | QuestionT4 | QuestionT5 | QuestionT6 | QuestionT9 | QuestionT10 | QuestionT11;
 
 export type Answer = { kind: 'choice'; index: number } | { kind: 'text'; text: string } | { kind: 'stress'; index: number };
 
@@ -115,6 +118,14 @@ export function grade(q: Question, a: Answer, opts: { yoLenient: boolean }): Gra
       return {
         class: q.stressed.includes(idx) ? 'correct' : 'wrong', tags: q.tags, given: mark(idx),
         expected: q.lemma.accented, prompt: q.word,
+      };
+    }
+    case 'T9': {
+      const text = a.kind === 'text' ? a.text : '';
+      const r = classify({ given: text, expected: q.expected, lemma: q.adjective, feat: q.feat, yoLenient: opts.yoLenient });
+      return {
+        class: r.class, confusion: r.confusion, tags: withTag(q.tags, r.tag), given: text, expected: q.expected.primary,
+        prompt: `${q.adjective.bare} + ${q.noun.bare} / ${q.feat.replace(/^adj\./, '')}`,
       };
     }
     case 'T11': {
