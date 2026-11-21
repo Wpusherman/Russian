@@ -4,7 +4,7 @@ import { glossOf, isUncertainGloss } from '../core/grade';
 import { CASE_JA, GENDER_JA, NUM_JA, aspectBadge, featLabelJa, verbConjType } from '../core/tags';
 import { ADJ_GENDERS, CASES, IMP_KEYS, NUMBERS, PAST_KEYS, PRES_KEYS, type Form, type Lemma } from '../core/types';
 import type { LemmaRow } from '../db/db';
-import { searchLemmas } from '../db/dict';
+import { searchLemmas, setGenderOverride } from '../db/dict';
 import { useAsync } from './common';
 
 const POS_JA: Record<string, string> = { noun: '名詞', verb: '動詞', adj: '形容詞', other: 'その他' };
@@ -54,7 +54,7 @@ export function FormsTable({ lemma }: { lemma: Lemma }): ReactNode {
   return <p className="muted">語形変化の情報はありません。</p>;
 }
 
-export function LemmaCard({ lemma }: { lemma: LemmaRow }): ReactNode {
+export function LemmaCard({ lemma, onGenderChange }: { lemma: LemmaRow; onGenderChange?: (g: 'm' | 'f' | 'n') => void }): ReactNode {
   const meta = [
     POS_JA[lemma.pos],
     lemma.gender && `性：${GENDER_JA[lemma.gender]}`,
@@ -71,6 +71,14 @@ export function LemmaCard({ lemma }: { lemma: LemmaRow }): ReactNode {
       <div className={isUncertainGloss(glossOf(lemma)) ? 'uncertain-gloss' : ''}>{glossOf(lemma) || <span className="muted">（訳語なし）</span>}{aspectBadge(lemma)}</div>
       {lemma.glossJa && lemma.glossEn.length > 0 && <div className="muted">{lemma.glossEn.slice(0, 4).join(', ')}</div>}
       <div className="muted small-text">{meta.join(' ・ ')}</div>
+      {lemma.pos === 'noun' && lemma.genderInferred && (
+        <div className="row">
+          <span className="muted small-text">性（語尾から推定）：</span>
+          {(['m', 'f', 'n'] as const).map((g) => (
+            <button key={g} className={`small${lemma.gender === g ? ' on' : ''}`} onClick={() => onGenderChange?.(g)}>{GENDER_JA[g]}</button>
+          ))}
+        </div>
+      )}
       <FormsTable lemma={lemma} />
     </div>
   );
@@ -81,7 +89,7 @@ export function DictPage(): ReactNode {
   const [selected, setSelected] = useState<LemmaRow | null>(null);
   // Latin input is transliterated so the box can be used without a Russian keyboard.
   const q = /[a-z]/i.test(query) ? translit(query) : query;
-  const { data } = useAsync(() => searchLemmas(q), [q]);
+  const { data, reload } = useAsync(() => searchLemmas(q), [q]);
   const results = data ?? [];
   const shown = selected && results.some((r) => r.id === selected.id) ? selected : results[0] ?? null;
   return (
@@ -101,7 +109,10 @@ export function DictPage(): ReactNode {
           ))}
           {q && results.length === 0 && <li className="muted">見つかりません。</li>}
         </ul>
-        <div>{shown && <LemmaCard lemma={shown} />}</div>
+        <div>{shown && <LemmaCard lemma={shown} onGenderChange={(g) => {
+          if (!shown) return;
+          void setGenderOverride(shown.id, g).then(() => { setSelected(null); reload(); });
+        }} />}</div>
       </div>
     </div>
   );

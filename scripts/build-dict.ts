@@ -81,6 +81,9 @@ function plain(s: string): string {
 }
 
 const VOWEL_SET = new Set([...'аеиоуыэюя']);
+
+/** Masculine nouns ending in -а / -я (the -а/-я rule would otherwise make them feminine). */
+export const MASC_A_YA = new Set(['папа', 'дядя', 'дедушка', 'мужчина', 'юноша', 'дядька']);
 const CONSONANTS = 'бвгджзйклмнпрстфхцчшщ';
 
 /**
@@ -93,7 +96,7 @@ export function inferGender(bare: string): 'm' | 'f' | 'n' | undefined {
   if (b.endsWith('ь')) return undefined;
   const last = b.slice(-1);
   if (CONSONANTS.includes(last)) return 'm';
-  if (last === 'а' || last === 'я') return 'f';
+  if (last === 'а' || last === 'я') return MASC_A_YA.has(b) ? 'm' : 'f';
   if (last === 'о' || last === 'е' || last === 'ё') return 'n';
   return undefined;
 }

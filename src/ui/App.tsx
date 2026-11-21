@@ -4,6 +4,7 @@ import { ManualProvider, type ManualRequest } from '../ai/manual';
 import type { AIProvider } from '../ai/provider';
 import { aiCallsToday, countAiCall } from '../ai/tasks';
 import { syncAppVersion } from '../db/backlog';
+import { dedupeStoredGlosses } from '../db/wordlists';
 import { ensureDict, type DictProgress } from '../db/dict';
 import { getApiKey, loadSettings } from '../db/settings';
 import { AI_EVENT, AiContext, navigate, useHashRoute } from './common';
@@ -88,8 +89,12 @@ export function App(): ReactNode {
   useEffect(() => {
     if (!ready) return;
     let alive = true;
-    void syncAppVersion(__APP_VERSION__).then((n) => {
-      if (alive && n > 0) setToast(`更新を検出: エクスポート済みのバックログ ${n} 件を削除しました`);
+    void Promise.all([syncAppVersion(__APP_VERSION__), dedupeStoredGlosses()]).then(([n, deduped]) => {
+      if (!alive) return;
+      const messages: string[] = [];
+      if (n > 0) messages.push(`エクスポート済みのバックログ ${n} 件を削除しました`);
+      if (deduped > 0) messages.push(`日本語訳の重複を ${deduped} 件整理しました`);
+      if (messages.length > 0) setToast(messages.join(' / '));
     });
     return () => { alive = false; };
   }, [ready]);

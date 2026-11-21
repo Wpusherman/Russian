@@ -8,7 +8,7 @@ import { confusionCounts, DAY_MS, tagStats, wilsonLB } from '../src/core/stats';
 import { ASPECT_FEAT, aspectBadge, expandTagPattern, tagsForFeat, verbConjType, confusionLabelJa } from '../src/core/tags';
 import { itemIdT9, parseItemId } from '../src/core/session';
 import { TRANSLIT_TABLE, translit, translitLive } from '../src/core/translit';
-import { mergeGloss, parseWordlistText } from '../src/core/wordlist';
+import { dedupeGloss, mergeGloss, parseWordlistText } from '../src/core/wordlist';
 import type { Attempt, Form, Lemma } from '../src/core/types';
 import { UNITS } from '../src/content/units';
 import { alternationFor, convertAccent, inferGender, splitForms, spellExceptionForms } from '../scripts/build-dict';
@@ -406,6 +406,14 @@ describe('wordlist gloss merge', () => {
     expect(mergeGloss('ランプ、電灯', '照明')).toBe('1. ランプ 2. 電灯 3. 照明'); // existing "、" format is renumbered
     expect(mergeGloss('ランプ', '')).toBe('ランプ');
     expect(mergeGloss('本、書物', 'ほん')).toBe('1. 本 2. 書物 3. ほん'); // exact-match dedupe only
+    // F2: numbered / "／" lists are split and deduped before merging.
+    expect(mergeGloss('何が', '何が')).toBe('何が');
+    expect(mergeGloss('何が', '何が／何を')).toBe('何が／何を');
+    expect(mergeGloss('1. 何が 2. 何を', '何が')).toBe('1. 何が 2. 何を');
+    expect(mergeGloss('何が', '何が、何を')).toBe('1. 何が 2. 何を');
+    expect(dedupeGloss('何が／何が')).toBe('何が');
+    expect(dedupeGloss('1. 何が 2. 何を／何が')).toBe('何が／何を'); // style follows the source
+    expect(dedupeGloss('ランプ、電灯、ランプ')).toBe('1. ランプ 2. 電灯');
   });
   it('parseWordlistText appends the gloss of duplicate words instead of dropping them', () => {
     expect(parseWordlistText('лампа\tランプ\nлампа\t電灯\nлампа')).toEqual([{ word: 'лампа', glossJa: '1. ランプ 2. 電灯' }]);
@@ -446,6 +454,10 @@ describe('build-dict derivation', () => {
     expect(inferGender('окно')).toBe('n');
     expect(inferGender('море')).toBe('n');
     expect(inferGender('время')).toBe('n'); // -мя
+    expect(inferGender('дядя')).toBe('m'); // MASC_A_YA exception
+    expect(inferGender('дедушка')).toBe('m');
+    expect(inferGender('папа')).toBe('m');
+    expect(inferGender('мама')).toBe('f');
     expect(inferGender('тетрадь')).toBeUndefined();
     expect(inferGender('день')).toBeUndefined();
   });

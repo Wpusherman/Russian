@@ -123,7 +123,7 @@ export async function runGloss(provider: AIProvider, ctx: Pick<StudyContext, 'ca
     const ja = it.ja.trim();
     if (valid.has(it.id) && ja) glosses[it.id] = ja; // unknown ids are ignored
   }
-  return saveGlosses(glosses);
+  return saveGlosses(glosses, { onlyIfMissing: true });
 }
 
 // ---------- aspect_items (A5 / T10) ----------

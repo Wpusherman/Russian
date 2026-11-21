@@ -17,12 +17,25 @@ function splitHint(word: string): { word: string; hint?: string } {
   return { word: stripped, hint: tokens.size > 0 ? [...tokens].join('') : undefined };
 }
 
-/** Meanings separated by "、" / "，" or numbered like "1. ... 2. ...". */
+/** Meanings separated by "、" / "，" / "／" / "/" or numbered like "1. ... 2. ...". */
 function parseParts(s: string): string[] {
   return s
-    .split(/(?:、|，)|(?<=^|\s)\d{1,2}\.\s+/u)
-    .map((p) => p.trim())
+    .split(/(?:、|，|／|\/)|(?<=^|\s)\d{1,2}\.\s+/u)
+    .map((p) => p.trim().replace(/\s+/g, ' '))
     .filter(Boolean);
+}
+
+/** Join meanings: keep the "／" style when the source used it, otherwise number them. */
+function joinGloss(parts: string[], source: string): string {
+  if (parts.length === 1) return parts[0]!;
+  return /[／/]/.test(source) ? parts.join('／') : parts.map((p, i) => `${i + 1}. ${p}`).join(' ');
+}
+
+/** Remove duplicate meanings while preserving order and the original separator style. */
+export function dedupeGloss(text: string): string {
+  const parts = [...new Set(parseParts(text))];
+  if (parts.length === 0) return '';
+  return joinGloss(parts, text);
 }
 
 /** Merge two annotation strings ("+対" + "+前" -> "+対+前"), keeping the first occurrence order. */
@@ -42,9 +55,11 @@ export function mergeGloss(existing: string, next: string): string {
   if (!a) return b;
   if (!b) return a;
   const parts = parseParts(a);
-  for (const p of parseParts(b)) if (!parts.includes(p)) parts.push(p);
-  if (parts.length === 1) return parts[0]!;
-  return parts.map((p, i) => `${i + 1}. ${p}`).join(' ');
+  const add = parseParts(b);
+  // Every new meaning is already there: leave the stored gloss untouched (no re-numbering).
+  if (!add.some((p) => !parts.includes(p))) return a;
+  for (const p of add) if (!parts.includes(p)) parts.push(p);
+  return joinGloss(parts, `${a} ${b}`);
 }
 
 /** One word (or phrase) per line: `見出し語[+注記…]` or `見出し語[+注記…]<TAB or ,>日本語訳`.

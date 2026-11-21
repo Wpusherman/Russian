@@ -31,6 +31,21 @@ export async function reapplyUserData(): Promise<void> {
     const upd = rows.filter((r): r is LemmaRow => !!r).map((r) => ({ ...r, hint: s.hints[r.id] }));
     await db.lemmas.bulkPut(upd);
   }
+  // F1: a user correction wins over the ending-based inference and makes the gender authoritative.
+  const genderIds = Object.keys(s.genderOverrides);
+  if (genderIds.length > 0) {
+    const rows = await db.lemmas.bulkGet(genderIds);
+    const upd = rows.filter((r): r is LemmaRow => !!r).map((r) => ({ ...r, gender: s.genderOverrides[r.id], genderInferred: undefined }));
+    await db.lemmas.bulkPut(upd);
+  }
+}
+
+/** F1: store a user's gender correction for an inferred noun. */
+export async function setGenderOverride(id: string, gender: 'm' | 'f' | 'n'): Promise<void> {
+  const s = await loadSettings();
+  await setSetting('genderOverrides', { ...s.genderOverrides, [id]: gender });
+  const row = await db.lemmas.get(id);
+  if (row) await db.lemmas.put({ ...row, gender, genderInferred: undefined });
 }
 
 async function fetchWithProgress(url: string, onRatio: (r: number) => void): Promise<string> {

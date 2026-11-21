@@ -9,6 +9,7 @@
 - `level` 列がないので rank から導出した：〜200 = A1、〜500 = A2、〜1000 = B1、〜2000 = B2、〜4000 = C1、それ以降は null（品詞ごとに適用するので A1 は計800語）。
 - 語形変化を1つも持たない行は品詞ファイルに関係なく `pos:'other'` とし、rank ≤ 10000 のものだけ出力する。
 - build-dict は aspect の `both` を保持し、動詞の子音交替 alt（長い組優先、scope は pres.2sg 語幹で all/1sg を判定）と綴り規則の例外 spellExceptions（dict.meta.json）を出力する。
+- 性推定の -а/-я 例外表 MASC_A_YA（папа, дядя, дедушка, мужчина, юноша, дядька）は m とし、судья・слуга・староста など共性は含めない。推定値は辞書詳細で m/f/n に修正でき、settings.genderOverrides に保存して辞書再読込後も適用する（修正時は genderInferred を外す）。
 - 性が欠けた名詞は主格単数の語尾から推定して `genderInferred` を付ける（-мя/о/е/ё→n、子音・й→m、а/я→f、ь→推定しない）。元データの性が常に優先で、推定値は noun.gender の出題に使わない（T9・T11 では使う）。
 - `translations.csv` はないので `glossJa` は辞書には入らない（AIの gloss と単語リストで付与）。`glossEn` は `translations_en` を `,` `;` で分割したもの。
 - 母音の直後でない `'` は捨てる。`pl_only=1` の名詞は `gender:'pl'`。
@@ -65,6 +66,7 @@
 - 同表記の辞書語が複数あるときは登録前に候補（id と訳）を選ばせ、choices で lemmaId を指定して登録する。未指定なら頻度順位が最小の1件。
 - 動詞の訳語には体のバッジ（impf〔不完〕/pf〔完〕/both〔両体〕）を付け、結果画面にペアを1行表示する。T1の誤答肢からは partnerIds と同一表示訳を除き、T2ではペアの表示訳が同一なら（過程・反復）/（1回・完了）を添える。
 - classify は wrong_form の直後に wrong_aspect を判定する（T2は相手の不定形、T3/T4は同じ FeatKey の形）。評価は Again、タグは verb.aspect.pair、confusion には体を記録する。
+- mergeGloss は番号・、・／で分割して前後空白を除いて正規化・重複除去し、新しい要素が既存に全て含まれる場合は変更しない。複数形の結合は入力に／があれば／、なければ番号。AI gloss は既存の日本語訳がある語をスキップし、起動時に glossDedupDone で一度だけ保存済み訳を重複除去する。
 - 注記付きの動詞・フレーズからT4を自動生成する。文は先頭の動詞をpres.1sgにして「Я … ___」、名詞は同じリスト→A1-A2から選び、注記の格・数（+複）で形を決める。タグは tagsForFeat と直前の前置詞。
 - addT4Item の重複判定は文・lemmaId・feat の3つで行う。
 - Translit/OS の両モードで母音直後の `=` を U+0301 に変換する（`=` は消える）。T2/T3で解答に U+0301 が含まれるときだけ typedStressOk を attempts.stressOk に記録し、評価は変えない。stats では stressOk を phon.stress として加算する。

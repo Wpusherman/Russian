@@ -10,11 +10,12 @@ import { DAY_MS } from '../src/core/stats';
 import type { Form, Lemma } from '../src/core/types';
 import { exportAll, importAll, parseBackup } from '../src/db/backup';
 import { SCHEMA_VERSION, db, RusloDB, setDb } from '../src/db/db';
+import { reapplyUserData, setGenderOverride } from '../src/db/dict';
 import { toRow } from '../src/db/dict';
 import { loadSettings, setSetting } from '../src/db/settings';
 import { activeWeights, buildQuestion, buildSession, glossCandidates, loadContext, newLemmaQueue, orderNewForU4, recordAttempt } from '../src/db/study';
 import { newFsrs } from '../src/core/scheduler';
-import { createWordlist, findAmbiguities } from '../src/db/wordlists';
+import { createWordlist, dedupeStoredGlosses, findAmbiguities, saveGlosses } from '../src/db/wordlists';
 import { markAllBacklogExported, syncAppVersion } from '../src/db/backlog';
 
 const f = (primary: string): Form => ({ primary, variants: [] });
@@ -695,5 +696,37 @@ describe('typed accent recording (B5)', () => {
     expect((await db.attempts.toArray()).at(-1)?.stressOk).toBe(false);
     const plain = grade(q, { kind: 'text', text: 'книга' }, { yoLenient: true });
     expect(plain.stressOk).toBeUndefined();
+  });
+});
+
+
+describe('gender override (F1)', () => {
+  it('stores the correction and re-applies it after a dictionary rebuild', async () => {
+    await db.lemmas.put(toRow({ ...noun('дяд', 1), id: 'n-дядя', bare: 'дядя', accented: 'дя́дя', gender: 'f', genderInferred: true }));
+    await setGenderOverride('n-дядя', 'm');
+    expect(await db.lemmas.get('n-дядя')).toMatchObject({ gender: 'm' });
+    expect((await db.lemmas.get('n-дядя'))?.genderInferred).toBeUndefined();
+    expect((await loadSettings()).genderOverrides).toEqual({ 'n-дядя': 'm' });
+
+    // A dictionary rebuild resets the row from dict.json; reapplyUserData restores the override.
+    await db.lemmas.update('n-дядя', { gender: 'f', genderInferred: true });
+    await reapplyUserData();
+    expect(await db.lemmas.get('n-дядя')).toMatchObject({ gender: 'm' });
+    expect((await db.lemmas.get('n-дядя'))?.genderInferred).toBeUndefined();
+  });
+});
+
+describe('gloss dedupe and AI skip (F2)', () => {
+  it('never appends AI glosses to user translations and dedupes stored glosses once', async () => {
+    await createWordlist('f2', 'лампа	1. ランプ 2. 電灯／ランプ');
+    expect((await db.lemmas.get('n-лампа'))?.glossJa).toBe('1. ランプ 2. 電灯／ランプ');
+
+    expect(await saveGlosses({ 'n-лампа': '照明' }, { onlyIfMissing: true })).toBe(0);
+    expect((await db.lemmas.get('n-лампа'))?.glossJa).not.toContain('照明');
+
+    expect(await dedupeStoredGlosses()).toBe(1);
+    expect((await db.lemmas.get('n-лампа'))?.glossJa).toBe('ランプ／電灯');
+    expect((await loadSettings()).glossDedupDone).toBe(true);
+    expect(await dedupeStoredGlosses()).toBe(0); // once only
   });
 });

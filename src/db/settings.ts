@@ -26,6 +26,10 @@ export type Settings = {
   glossJa: Record<string, string>;
   /** Grammar annotations (e.g. "+対") per lemma id, kept like glossJa. */
   hints: Record<string, string>;
+  /** User corrections of an inferred noun gender (lemma id -> gender). */
+  genderOverrides: Record<string, 'm' | 'f' | 'n'>;
+  /** One-shot migration flag for removing duplicate glosses on startup. */
+  glossDedupDone: boolean;
   /** Dictionary forms that legitimately contain a spelling-rule pattern (from dict.meta.json). */
   spellExceptions: string[];
   /** Word-list words that are not in the dictionary. */
@@ -60,6 +64,8 @@ export const DEFAULTS: Settings = {
   lastAnalyzedAttemptId: 0,
   glossJa: {},
   hints: {},
+  genderOverrides: {},
+  glossDedupDone: false,
   spellExceptions: [],
   userLemmas: [],
   seedVersion: 0,

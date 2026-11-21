@@ -1,7 +1,7 @@
 import { convertAccent } from '../core/accent';
 import { featLabelJa } from '../core/tags';
 import { translit } from '../core/translit';
-import { mergeGloss, mergeHints, parseWordlistText } from '../core/wordlist';
+import { dedupeGloss, mergeGloss, mergeHints, parseWordlistText } from '../core/wordlist';
 import { db, type LemmaRow, type T4Payload, type WordlistEntry, type WordlistRow } from './db';
 import { addT4Item } from './study';
 import { findLemmas, lemmaKey } from './dict';
@@ -18,22 +18,46 @@ export function normalizeHeadword(word: string): string {
  * Store Japanese glosses on the lemmas and in settings (so they survive dictionary rebuilds).
  * A meaning that is already there stays first; new meanings are appended, numbered from two on.
  */
-export async function saveGlosses(glosses: Record<string, string>): Promise<number> {
+export async function saveGlosses(glosses: Record<string, string>, opts: { onlyIfMissing?: boolean } = {}): Promise<number> {
   const ids = Object.keys(glosses);
   if (ids.length === 0) return 0;
   const s = await loadSettings();
   const merged = { ...s.glossJa };
   const rows = await db.lemmas.bulkGet(ids);
   const found = rows.filter((r): r is LemmaRow => !!r);
+  // AI glosses must never touch a word that already has a Japanese translation (F2).
+  const targets = opts.onlyIfMissing ? found.filter((r) => !(r.glossJa ?? merged[r.id])) : found;
+  if (targets.length === 0) return 0;
   await db.lemmas.bulkPut(
-    found.map((r) => {
+    targets.map((r) => {
       const next = mergeGloss(r.glossJa ?? merged[r.id] ?? '', glosses[r.id]!);
       merged[r.id] = next;
       return { ...r, glossJa: next };
     }),
   );
   await setSetting('glossJa', merged);
-  return found.length;
+  return targets.length;
+}
+
+/** F2: one-shot startup migration that removes duplicate meanings from every stored gloss. */
+export async function dedupeStoredGlosses(): Promise<number> {
+  const s = await loadSettings();
+  if (s.glossDedupDone) return 0;
+  const next = { ...s.glossJa };
+  let changed = 0;
+  for (const [id, g] of Object.entries(next)) {
+    const d = dedupeGloss(g);
+    if (d !== g) { next[id] = d; changed++; }
+  }
+  await setSetting('glossJa', next);
+  const ids = Object.keys(next);
+  if (ids.length > 0) {
+    const rows = await db.lemmas.bulkGet(ids);
+    const upd = rows.filter((r): r is LemmaRow => !!r).map((r) => ({ ...r, glossJa: next[r.id] }));
+    await db.lemmas.bulkPut(upd);
+  }
+  await setSetting('glossDedupDone', true);
+  return changed;
 }
 
 /** Grammar annotations (e.g. "+対") shown next to the word; kept in settings like glossJa. */
