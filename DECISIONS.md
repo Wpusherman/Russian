@@ -61,4 +61,6 @@
 - 空白を含むフレーズ（イディオム）は、辞書に一致しなければフレーズ全体で1つのユーザー語（`u-сесть_на` のような id、語形変化なし、T1/T2のみ）として登録する。T2ではフレーズ全体を入力する。
 - 単語リストで辞書にない語は id `u-<語>` のユーザー語として登録。訳語がない語は出題できないので新規枠から外す。
 - インポートは全置換だが、辞書本体（`lemmas` と `dictVersion`）は保持する。
+- FEATURE_BACKLOG.md は実装完了項目を削除し、履歴はコミットメッセージ（feat: 項目名）に残す。実装ごとに package.json のパッチ版を上げ、APP_FEATURES を更新する。
+- バックログは status（'new' / 'exported'）を持ち、全件コピーまたは .md ダウンロードで exported にする。起動時に Vite の define で埋め込んだ version と settings.appVersion を比べ、違えば exported だけを削除してトースト表示する。
 - テストのIndexedDBは `fake-indexeddb`（devDependency）。
