@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { API_REVISION, GeminiProvider, extractText, ptDate } from '../src/ai/gemini';
 import { ManualProvider, buildManualPrompt } from '../src/ai/manual';
 import { buildAnalyzePacket, PACKET_MAX_CHARS } from '../src/ai/packet';
-import { SYSTEM_PROMPTS } from '../src/ai/prompts';
+import { APP_FEATURES, SYSTEM_PROMPTS } from '../src/ai/prompts';
 import { AIError, parseTaskOutput, stripFence } from '../src/ai/provider';
 import { analyzeJsonSchema, explainJsonSchema, type AnalyzeOutput, type NewItem } from '../src/ai/schemas';
 import { validateNewItem } from '../src/ai/validate';
@@ -195,6 +195,17 @@ describe('validateNewItem', () => {
   });
 });
 
+describe('APP_FEATURES', () => {
+  it('is a short, bounded list and is referenced by the analyze prompt', () => {
+    expect(APP_FEATURES.length).toBeGreaterThan(0);
+    expect(APP_FEATURES.length).toBeLessThanOrEqual(40);
+    for (const f of APP_FEATURES) expect(f.length, f).toBeLessThanOrEqual(30);
+    expect(new Set(APP_FEATURES).size).toBe(APP_FEATURES.length);
+    expect(SYSTEM_PROMPTS.analyze).toContain('app_features');
+    expect(SYSTEM_PROMPTS.analyze).toContain('重複させない');
+  });
+});
+
 describe('buildAnalyzePacket', () => {
   const now = Date.UTC(2026, 5, 30);
   const mk = (i: number, cls: Attempt['class'], tag: string): Attempt => ({
@@ -222,6 +233,7 @@ describe('buildAnalyzePacket', () => {
     expect(packet.samples.every((s) => s.class !== 'correct')).toBe(true);
     expect(packet.samples[0]!.expected).toBe('книге'); // no stress marks
     expect(packet.current_weights).toEqual([{ tag: 'noun.prep.sg', w: 1.5 }]);
+    expect(packet.app_features).toEqual(APP_FEATURES);
     expect(JSON.stringify(packet).length).toBeLessThanOrEqual(PACKET_MAX_CHARS);
   });
   it('drops samples until it fits', () => {

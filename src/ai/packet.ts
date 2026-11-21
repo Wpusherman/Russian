@@ -1,4 +1,5 @@
 import { confusionCounts, DAY_MS, type TagStat } from '../core/stats';
+import { APP_FEATURES } from './prompts';
 import type { Attempt } from '../core/types';
 
 export type AnalyzePacket = {
@@ -7,6 +8,7 @@ export type AnalyzePacket = {
   confusions: { expected: string; given: string; n: number }[];
   samples: { type: string; prompt: string; expected: string; given: string; class: string }[];
   current_weights: { tag: string; w: number }[];
+  app_features: string[];
 };
 
 export const PACKET_MAX_CHARS = 6000;
@@ -47,6 +49,7 @@ export function buildAnalyzePacket(input: PacketInput): AnalyzePacket {
     profile: { native: 'ja', goal: 'writing→ТРКИ', unit: input.unitId, days },
     tag_stats, confusions, samples,
     current_weights: Object.entries(input.weights).map(([tag, w]) => ({ tag, w })),
+    app_features: APP_FEATURES,
   };
   while (JSON.stringify(packet).length > PACKET_MAX_CHARS && packet.samples.length > 0) packet.samples.pop();
   return packet;

@@ -1,11 +1,32 @@
 import type { AITask } from '../db/settings';
 
+/** Implemented features, summarised for the analyze task (max 40 items, at most 30 chars each). */
+export const APP_FEATURES: string[] = [
+  'T1 意味認識（4択）',
+  'T2 綴り想起',
+  'T3 語形ドリル',
+  'T4 AI穴埋め',
+  'T5 アクセント',
+  'T6 ディクテーション',
+  '語形の自動タグ付け',
+  '弱点タグの統計と信頼下限',
+  'AI弱点分析とタグ重み',
+  'AI日本語訳（gloss）',
+  '単語リスト登録（訳の付記）',
+  'ローマ字入力の辞書検索',
+  '文法ノート生成',
+  'バックログ管理と版での自動削除',
+  'バックアップのエクスポート／インポート',
+  'プロキシ／Manualモード',
+  '誤答のAI解説',
+];
+
 export const SYSTEM_PROMPTS: Record<AITask, string> = {
   analyze: `あなたはロシア語教師兼学習データ分析者。学習者は日本語話者の初級者で、目標は「書ける」こと、最終的にТРКИ。
 入力は集計済みの学習統計。根拠のない推測をせず、evidenceには入力中の数値を引用する。
 tag_weightsは弱点ほど大きく(0.5-3)。new_itemsは弱点タグを狙う穴埋め文で、語彙はA1-A2、文は8語以内、
 sentence_ruに空欄"___"を1つだけ含め、lemmaは辞書形(アクセント記号なし)、featは次の形式: case.<nom|gen|dat|acc|ins|prep>.<sg|pl> / pres.<1sg..3pl> / past.<m|f|n|pl> / adj.<case>.<m|f|n|pl>。
-feature_requestsは、統計から見て学習アプリ側に追加すべき機能があれば最大3件、実装可能な具体的仕様で書く。全て日本語(ロシア語部分を除く)。`,
+feature_requestsは、統計から見て学習アプリ側に追加すべき機能があれば最大3件、実装可能な具体的仕様で書く。feature_requests は app_features および backlog_titles と重複させない。全て日本語(ロシア語部分を除く)。`,
   gloss: `あなたは露和辞典の編集者。入力は [{id, ru, en?, pos, aspect?, partner?}] の配列（ru はロシア語の見出し語、en は英語の訳語でないこともある、pos は品詞、aspect は動詞の体、partner は対になる動詞）。
 各語について日本語訳 ja を作る。ja は15字以内で、主な意味を最大2つ、「、」区切り。説明や品詞名は書かない。
 en がない語は ru だけから訳す。訳に自信がない場合は ja の末尾に「?」を付ける。

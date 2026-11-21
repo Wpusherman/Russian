@@ -167,9 +167,3 @@ FEATURE_BACKLOG.md の「動詞活用形入力時のリアルタイム語幹変�
 - system_instruction（aspect_items）:「ロシア語の体の使い分けを練習する穴埋め文を作る。文は8語以内、語彙はA1-A2。体を一意に決める手がかり（каждый день, часто, долго / уже, наконец, вчера＋結果, всю и т.п.）を必ず文中に含め、両方の体が自然に成り立つ文は作らない。impf と pf は入力のペアのみを使う。」
 - session: 弱点枠で verb.aspect.choice が選ばれたら T10 のカードを出す。在庫がなければ、ホームに「体のドリルを生成」バナーを出す。
 
-バックログの運用を変更する。この指示は、以前の「完了したらバックログの該当項目を『実装済み（日付）』に移す」を上書きする。質問はせず、細部は DECISIONS.md に1行で追記。
-
-### 2. APP_FEATURES（実装済み機能の要約）
-- src/ai/prompts.ts に `export const APP_FEATURES: string[]` を追加する。現在実装されている主な機能を、1件あたり30字以内の日本語で列挙する（最大40件）。例:「T3語形ドリル」「子音交替の判定と交替カード」「タグ別の集中練習」。
-- analyze の入力パケットに app_features（APP_FEATURES）を追加する。
-- analyze の system_instruction に追記する:「feature_requests は app_features および backlog_titles と重複させない。」
