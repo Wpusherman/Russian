@@ -53,6 +53,9 @@ kbd { border: 1px solid var(--border); }
 .small-text { font-size: 0.85rem; }
 .ok-text { color: var(--ok); }
 .error-text { color: var(--ng); }
+.reading-text { font-size: 1.25rem; line-height: 2; margin: 0.3rem 0; }
+.word-ok { border-bottom: 2px solid var(--ok); }
+.word-ng { border-bottom: 2px dashed var(--ng); color: var(--muted); }
 
 header.top {
   display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
