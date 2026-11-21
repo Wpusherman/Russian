@@ -53,7 +53,7 @@ export async function saveHints(hints: Record<string, string>): Promise<number> 
   return updates.length;
 }
 
-export type ImportSummary = { matched: number; created: number; total: number };
+export type ImportSummary = { matched: number; created: number; total: number; /** Registered words with neither a Japanese nor an English gloss (never asked). */ unglossed: string[] };
 
 /** Create a word list from pasted text (spec section 11). */
 export async function createWordlist(name: string, text: string): Promise<ImportSummary> {
@@ -98,7 +98,9 @@ export async function createWordlist(name: string, text: string): Promise<Import
   const all = await db.wordlists.toArray();
   const priority = all.reduce((m, l) => Math.max(m, l.priority), 0) + 1;
   await db.wordlists.add({ name: name.trim() || '無題のリスト', priority, active: true, entries });
-  return { matched, created: newUser.length, total: entries.length };
+  const saved = await db.lemmas.bulkGet(entries.map((e) => e.lemmaId));
+  const unglossed = [...new Set(saved.filter((r): r is LemmaRow => !!r && !r.glossJa && r.glossEn.length === 0).map((r) => r.bare))];
+  return { matched, created: newUser.length, total: entries.length, unglossed };
 }
 
 export async function listWordlists(): Promise<WordlistRow[]> {

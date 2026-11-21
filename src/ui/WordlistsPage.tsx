@@ -7,7 +7,13 @@ export function WordlistsPage(): ReactNode {
   const { data, reload } = useAsync(async () => {
     const lists = await listWordlists();
     const learned = new Set((await db.cards.where('type').equals('T1').toArray()).map((c) => c.lemmaId));
-    return { lists, learned };
+    const ids = [...new Set(lists.flatMap((l) => l.entries.map((e) => e.lemmaId)))];
+    const rows = await db.lemmas.bulkGet(ids);
+    const byId = new Map(rows.filter((r) => !!r).map((r) => [r!.id, r!]));
+    const playable = new Map(lists.map((l) => [
+      l.id!, l.entries.filter((e) => { const r = byId.get(e.lemmaId); return !!r && (!!r.glossJa || r.glossEn.length > 0); }).length,
+    ]));
+    return { lists, learned, playable };
   }, []);
   const [name, setName] = useState('');
   const [text, setText] = useState('');
@@ -48,7 +54,7 @@ export function WordlistsPage(): ReactNode {
         <h2>登録済みのリスト</h2>
         {lists.length === 0 ? <p className="muted">まだありません。</p> : (
           <table className="table">
-            <thead><tr><th>優先</th><th>名前</th><th>語数</th><th>学習済み</th><th>有効</th><th /></tr></thead>
+            <thead><tr><th>優先</th><th>名前</th><th>語数</th><th>出題可能</th><th>学習済み</th><th>有効</th><th /></tr></thead>
             <tbody>
               {lists.map((l, i) => (
                 <tr key={l.id} className={l.active ? '' : 'dim-row'}>
@@ -58,6 +64,7 @@ export function WordlistsPage(): ReactNode {
                   </td>
                   <td>{l.name}</td>
                   <td>{l.entries.length}</td>
+                  <td>{data!.playable.get(l.id!) ?? 0}</td>
                   <td>{l.entries.filter((e) => data!.learned.has(e.lemmaId)).length}</td>
                   <td><input type="checkbox" checked={l.active} onChange={(e) => void toggle(l.id!, e.target.checked)} /></td>
                   <td><button className="small ghost" onClick={() => void remove(l.id!, l.name)}>削除</button></td>
@@ -80,6 +87,7 @@ export function WordlistsPage(): ReactNode {
           {summary && (
             <span className="ok-text">
               {summary.total}語を登録しました（辞書と一致 {summary.matched}語、辞書にない語 {summary.created}語）。
+              {summary.unglossed.length > 0 && ` 訳がなく出題対象外：${summary.unglossed.length}語（${summary.unglossed.slice(0, 10).join(', ')}${summary.unglossed.length > 10 ? ' ほか' : ''}）`}
             </span>
           )}
         </div>

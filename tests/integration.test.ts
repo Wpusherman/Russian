@@ -133,7 +133,7 @@ describe('session end to end (M3)', () => {
 describe('word lists (M4)', () => {
   it('matches dictionary words, overrides glossJa, registers unknown words, and prioritises them as new words', async () => {
     const r = await createWordlist('教科書', 'лампа\tランプ\nКНИ\u0301ГА\nпривет,やあ\n\nлампа\n');
-    expect(r).toEqual({ matched: 2, created: 1, total: 3 });
+    expect(r).toEqual({ matched: 2, created: 1, total: 3, unglossed: [] });
     expect((await db.lemmas.get('n-лампа'))?.glossJa).toBe('ランプ');
     const user = await db.lemmas.get('u-привет');
     expect(user).toMatchObject({ pos: 'other', forms: {}, glossJa: 'やあ', user: true });
@@ -182,6 +182,11 @@ describe('word lists (M4)', () => {
     const accented = await db.lemmas.get('u-сказать');
     expect(accented?.bare).toBe('сказать');
     expect(accented?.accented).toBe('сказа\u0301ть');
+  });
+  it('reports words that have no translation and therefore are never asked (W5)', async () => {
+    const r = await createWordlist('mixed', 'привет\nкнига\t本\nпока');
+    expect(r.created).toBe(2);
+    expect(r.unglossed.sort()).toEqual(['пока', 'привет']);
   });
 });
 
