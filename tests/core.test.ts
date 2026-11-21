@@ -263,6 +263,37 @@ describe('aspect (A1-A4)', () => {
   });
 });
 
+describe('consonant alternation (B1)', () => {
+  const sprosit: Lemma = {
+    ...govorit, id: 'v-спросить', bare: 'спросить', alt: { from: 'с', to: 'ш', scope: '1sg' },
+    forms: { 'pres.1sg': form('спрошу́'), 'pres.2sg': form('спроси́шь'), 'pres.3sg': form('спроси́т') },
+  };
+  const pisat: Lemma = {
+    ...govorit, id: 'v-писать', bare: 'писать', alt: { from: 'с', to: 'ш', scope: 'all' },
+    forms: { 'pres.1sg': form('пишу́'), 'pres.2sg': form('пи́шешь') },
+  };
+  const pokazat: Lemma = {
+    ...govorit, id: 'v-показать', bare: 'показать', alt: { from: 'з', to: 'ж', scope: 'all' },
+    forms: { 'pres.1sg': form('покажу́') },
+  };
+  it('detects the missing alternation at pres.1sg (with the у/ю swap)', () => {
+    const expected = sprosit.forms['pres.1sg']!;
+    expect(classify({ given: 'спросу', expected, lemma: sprosit, feat: 'pres.1sg' })).toEqual({ class: 'no_alternation', tag: 'verb.pres.alt' });
+    expect(classify({ given: 'спросю', expected, lemma: sprosit, feat: 'pres.1sg' })).toEqual({ class: 'no_alternation', tag: 'verb.pres.alt' });
+    expect(classify({ given: 'спрошу', expected, lemma: sprosit, feat: 'pres.1sg' }).class).toBe('correct');
+  });
+  it('detects the missing alternation on other persons / infinitive-stem answers', () => {
+    expect(classify({ given: 'писешь', expected: pisat.forms['pres.2sg']!, lemma: pisat, feat: 'pres.2sg' }).class).toBe('no_alternation');
+    expect(classify({ given: 'показаю', expected: pokazat.forms['pres.1sg']!, lemma: pokazat, feat: 'pres.1sg' }).class).toBe('no_alternation');
+    expect(classify({ given: 'пишешь', expected: pisat.forms['pres.2sg']!, lemma: pisat, feat: 'pres.2sg' }).class).toBe('correct');
+  });
+  it('tags only the persons where the alternation applies', () => {
+    expect(tagsForFeat(sprosit, 'pres.1sg')).toContain('verb.pres.alt');
+    expect(tagsForFeat(sprosit, 'pres.2sg')).not.toContain('verb.pres.alt');
+    expect(tagsForFeat(pisat, 'pres.2sg')).toContain('verb.pres.alt');
+  });
+});
+
 describe('aspect tag split (A5)', () => {
   it('tags the pseudo aspect form as verb.aspect.pair', () => {
     expect(tagsForFeat(govorit, ASPECT_FEAT)).toEqual(['verb.aspect.pair']);

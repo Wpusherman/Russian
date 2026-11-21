@@ -7,7 +7,7 @@ type Base = { itemId: string; lemmaId: string; tags: string[] };
 
 export type QuestionT1 = Base & { type: 'T1'; lemma: Lemma; options: string[]; correct: number; hint?: string };
 export type QuestionT2 = Base & { type: 'T2'; lemma: Lemma; gloss: string; expected: Form; hint?: string; partners?: Lemma[]; note?: string };
-export type QuestionT3 = Base & { type: 'T3'; lemma: Lemma; feat: FeatKey; gloss: string; expected: Form; partners?: Lemma[] };
+export type QuestionT3 = Base & { type: 'T3'; lemma: Lemma; feat: FeatKey; gloss: string; expected: Form; partners?: Lemma[]; /** No card history yet: show the alternation card even when correct (B1). */ first?: boolean };
 export type QuestionT4 = Base & {
   type: 'T4'; lemma: Lemma; feat: FeatKey; sentence: string; translation: string; explain: string; expected: Form; partners?: Lemma[];
 };

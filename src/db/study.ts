@@ -244,7 +244,11 @@ export async function buildQuestion(p: PlannedItem, rng: () => number = Math.ran
     case 'T3': {
       const expected = feat ? expectedForm(lemma, feat) : null;
       if (!feat || !expected) return null;
-      return { ...base, type: 'T3', tags: tagsForFeat(lemma, feat), lemma, feat, gloss, expected, partners: await partnersOf(lemma) };
+      const card = await db.cards.get(p.itemId);
+      return {
+        ...base, type: 'T3', tags: tagsForFeat(lemma, feat), lemma, feat, gloss, expected,
+        partners: await partnersOf(lemma), first: (card?.reps ?? 0) === 0,
+      };
     }
     case 'T5': {
       if (!stressable(lemma)) return null;
@@ -257,6 +261,17 @@ export async function buildQuestion(p: PlannedItem, rng: () => number = Math.ran
       return { ...base, type: 'T11', tags: ['num.gov'], lemma, num: n, expected };
     }
   }
+}
+
+/** U4 new words: plain verbs first until both conjugation tags have n >= 10 (B1). */
+export function orderNewForU4(ids: readonly string[], byId: ReadonlyMap<string, LemmaRow>, stats: ReadonlyMap<string, TagStat>): string[] {
+  const need = (stats.get('verb.pres.conj1')?.n ?? 0) < 10 || (stats.get('verb.pres.conj2')?.n ?? 0) < 10;
+  if (!need) return [...ids];
+  const simple = (id: string) => {
+    const l = byId.get(id);
+    return !!l && l.pos === 'verb' && !l.alt && !/(ся|сь)$/.test(l.bare);
+  };
+  return [...ids.filter(simple), ...ids.filter((id) => !simple(id))];
 }
 
 /** Plan a session (spec section 10) and materialise its questions. */
@@ -272,9 +287,16 @@ export async function buildSession(ctx: StudyContext, opts: { ttsAvailable: bool
   const t1Correct = new Set(ctx.cards.filter((c) => c.type === 'T2').map((c) => c.lemmaId));
   const reviewIds = ctx.cards.filter((c) => c.type === 'T1' && c.state === STATE_REVIEW).map((c) => c.lemmaId);
   const preferred = new Set(reviewIds);
-  const [reviewLemmas, a1, items, newIds] = await Promise.all([
+  const [reviewLemmas, a1, items, newQueue] = await Promise.all([
     db.lemmas.bulkGet(reviewIds), db.lemmas.where('level').equals('A1').toArray(), db.items.toArray(), newLemmaQueue(ctx.cards),
   ]);
+  let newIds = newQueue;
+  if (ctx.current.id === 'U4') {
+    // B1: until both conjugation types have enough attempts, prefer verbs without an alternation / -ся.
+    const rows = await db.lemmas.bulkGet(newIds);
+    const byId = new Map(rows.filter((r): r is LemmaRow => !!r).map((r) => [r.id, r]));
+    newIds = orderNewForU4(newIds, byId, ctx.stats);
+  }
   const pool = new Map<string, LemmaRow>();
   for (const l of [...reviewLemmas, ...a1]) if (l) pool.set(l.id, l);
 

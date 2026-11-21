@@ -1,5 +1,5 @@
 import { analyzeStress, normalize } from './normalize';
-import { PSEUDO_FEATS } from './tags';
+import { PSEUDO_FEATS, verbStems } from './tags';
 import type { AnswerClass, Confusion, FeatKey, Form, ItemType, Lemma, RatingNum } from './types';
 
 export type ClassifyInput = {
@@ -103,6 +103,24 @@ export function classify(input: ClassifyInput): ClassifyResult {
     }
   }
 
+  // 3.6 no_alternation: the stem's consonant alternation was not applied (B1).
+  const alt = input.lemma?.alt;
+  if (alt && input.lemma && input.feat?.startsWith('pres') && (alt.scope === 'all' || input.feat === 'pres.1sg')) {
+    const stems = verbStems(input.lemma);
+    const expected = normalize(input.expected.primary, opts);
+    if (stems && stems.pres1 && expected.startsWith(stems.pres1)) {
+      const c = expected.slice(0, stems.pres1.length - alt.to.length) + alt.from + expected.slice(stems.pres1.length);
+      if (given === c) return { class: 'no_alternation', tag: 'verb.pres.alt' };
+      if (input.feat === 'pres.1sg') {
+        const swapped = c.endsWith('у') ? `${c.slice(0, -1)}ю` : c.endsWith('ю') ? `${c.slice(0, -1)}у` : '';
+        if (swapped && given === swapped) return { class: 'no_alternation', tag: 'verb.pres.alt' };
+      }
+    }
+    if (stems && stems.infFull.length > 0 && given.startsWith(stems.infFull) && !expected.startsWith(stems.infFull)) {
+      return { class: 'no_alternation', tag: 'verb.pres.alt' };
+    }
+  }
+
   // 4. spelling_rule
   for (const c of cands) {
     const tag = spellingRuleTag(given, c, yoLenient);
@@ -132,6 +150,7 @@ export function ratingFor(args: { class: AnswerClass; type: ItemType; hintUsed: 
     case 'wrong':
     case 'wrong_form':
     case 'wrong_aspect':
+    case 'no_alternation':
     case 'spelling_rule':
       return 1;
     case 'typo':
@@ -147,6 +166,7 @@ export const CLASS_JA: Record<AnswerClass, string> = {
   orthographic: '正解（ё/е・アクセント表記の違い）',
   wrong_form: '別の語形',
   wrong_aspect: '体の取り違え',
+  no_alternation: '子音交替の誤り',
   spelling_rule: '綴りの規則ミス',
   typo: 'タイプミス',
   wrong: '不正解',

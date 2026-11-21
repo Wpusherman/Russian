@@ -12,7 +12,7 @@ import { exportAll, importAll, parseBackup } from '../src/db/backup';
 import { SCHEMA_VERSION, db, RusloDB, setDb } from '../src/db/db';
 import { toRow } from '../src/db/dict';
 import { loadSettings, setSetting } from '../src/db/settings';
-import { activeWeights, buildQuestion, buildSession, glossCandidates, loadContext, newLemmaQueue, recordAttempt } from '../src/db/study';
+import { activeWeights, buildQuestion, buildSession, glossCandidates, loadContext, newLemmaQueue, orderNewForU4, recordAttempt } from '../src/db/study';
 import { newFsrs } from '../src/core/scheduler';
 import { createWordlist, findAmbiguities } from '../src/db/wordlists';
 import { markAllBacklogExported, syncAppVersion } from '../src/db/backlog';
@@ -581,5 +581,41 @@ describe('T10 aspect drill (A5)', () => {
     const g = grade(q, { kind: 'text', text: 'читал' }, { yoLenient: true });
     expect(g).toMatchObject({ class: 'wrong_aspect', confusion: { expected: 'pf', given: 'impf' } });
     expect(g.tags).toEqual(expect.arrayContaining(['verb.aspect.choice', 'verb.aspect.pair']));
+  });
+});
+
+
+describe('alternation card state (B1)', () => {
+  const pisat: Lemma = {
+    id: 'v-писать', bare: 'писать', accented: 'писа́ть', pos: 'verb', rank: 40, level: 'A1', aspect: 'impf',
+    alt: { from: 'с', to: 'ш', scope: 'all' }, glossEn: ['write'],
+    forms: { 'pres.1sg': f('пишу́'), 'pres.2sg': f('пи́шешь'), 'pres.3sg': f('пи́шет') },
+  };
+
+  it('shows the alternation card on the first attempt and not on later ones', async () => {
+    await db.lemmas.put(toRow(pisat));
+    const plan = { itemId: 'T3:v-писать:pres.1sg', type: 'T3' as const, lemmaId: 'v-писать', slot: 'weak' as const };
+    const q1 = await buildQuestion(plan);
+    if (q1?.type !== 'T3') throw new Error('expected T3');
+    expect(q1.first).toBe(true);
+    expect(q1.tags).toContain('verb.pres.alt');
+    const g = grade(q1, { kind: 'text', text: q1.expected.primary }, { yoLenient: true });
+    await recordAttempt({ question: q1, graded: g, rating: 3, latencyMs: 1000, hintCount: 0, now: Date.now() });
+    const q2 = await buildQuestion(plan);
+    if (q2?.type !== 'T3') throw new Error('expected T3');
+    expect(q2.first).toBe(false);
+  });
+
+  it('puts plain verbs first in the U4 new slot until both conjugation tags have n >= 10', () => {
+    const alt: Lemma = { ...pisat, id: 'v-alt' };
+    const reflexive: Lemma = { ...pisat, id: 'v-ся', bare: 'учиться', alt: undefined };
+    const plain: Lemma = { ...pisat, id: 'v-plain', bare: 'делать', alt: undefined };
+    const nounL: Lemma = { ...noun('книг', 1), id: 'n-book' };
+    const byId = new Map([alt, reflexive, plain, nounL].map((l) => [l.id, toRow(l)]));
+    const st = (tag: string, n: number) => ({ tag, n, k: 0, acc: 0, lb: 0, weakness: 0, trend: 0 });
+    const early = new Map([['verb.pres.conj1', st('verb.pres.conj1', 3)], ['verb.pres.conj2', st('verb.pres.conj2', 3)]]);
+    expect(orderNewForU4(['v-alt', 'v-ся', 'v-plain', 'n-book'], byId, early)).toEqual(['v-plain', 'v-alt', 'v-ся', 'n-book']);
+    const done = new Map([['verb.pres.conj1', st('verb.pres.conj1', 10)], ['verb.pres.conj2', st('verb.pres.conj2', 10)]]);
+    expect(orderNewForU4(['v-alt', 'v-ся', 'v-plain'], byId, done)).toEqual(['v-alt', 'v-ся', 'v-plain']);
   });
 });

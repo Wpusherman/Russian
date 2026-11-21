@@ -203,6 +203,12 @@ describe('units', () => {
     few.set(u1.tags[0]!, stat(u1.tags[0]!, 9, 9)); // n < 10
     expect(computeUnlocked(few, new Set())).toEqual(['U1']);
   });
+  it('adds verb.pres.alt to U4 without making it a gate', () => {
+    const u4 = UNITS[3]!;
+    expect(u4.tags).toContain('verb.pres.alt');
+    const full = new Map(u4.tags.filter((t) => t !== 'verb.pres.alt').map((t) => [t, stat(t, 20, 20)]));
+    expect(unitMastered(u4, full)).toBe(true);
+  });
   it('keeps manual unlocks and picks the last unlocked unit as current', () => {
     const unlocked = computeUnlocked(new Map(), new Set(['U5']));
     expect(unlocked).toEqual(['U1', 'U5']);

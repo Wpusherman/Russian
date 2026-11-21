@@ -3,7 +3,7 @@ import { cachedExplain, runExplain } from '../ai/tasks';
 import { CLASS_JA, isCorrectClass, ratingFor } from '../core/classify';
 import { grade, hintText, isUncertainGloss, targetLabel, type Answer, type Graded, type Question } from '../core/grade';
 import { isVowel, normalize } from '../core/normalize';
-import { aspectBadge, confusionLabelJa } from '../core/tags';
+import { aspectBadge, confusionLabelJa, featLabelJa } from '../core/tags';
 import type { AnswerClass, RatingNum } from '../core/types';
 import type { Settings } from '../db/settings';
 import { buildSession, loadContext, recordAttempt } from '../db/study';
@@ -201,6 +201,30 @@ function QuestionView(props: {
   );
 }
 
+function AltCard({ q }: { q: Question }): ReactNode {
+  if (q.type !== 'T3' || !q.lemma.alt) return null;
+  const alt = q.lemma.alt;
+  const mark = (text: string) => {
+    const i = text.indexOf(alt.to);
+    return i < 0 ? text : <>{text.slice(0, i)}<b>{alt.to}</b>{text.slice(i + alt.to.length)}</>;
+  };
+  const keys = ['pres.1sg', 'pres.2sg', 'pres.3sg', 'pres.1pl', 'pres.2pl', 'pres.3pl'];
+  return (
+    <div className="card alt-card">
+      <h3>子音交替</h3>
+      <p className="ru big">{q.lemma.bare} → {q.lemma.forms['pres.1sg']?.primary ?? ''}</p>
+      <p className="muted">{alt.from} が {alt.to} に変わります（{alt.scope === 'all' ? '全人称' : '1人称単数のみ'}）。</p>
+      <table className="forms">
+        <tbody>
+          {keys.map((k) => q.lemma.forms[k] ? (
+            <tr key={k}><th>{featLabelJa(k)}</th><td className="ru">{mark(q.lemma.forms[k]!.primary)}</td></tr>
+          ) : null)}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ResultView(props: {
   q: Question; result: Result; onRate: (r: RatingNum) => void; onNext: () => void; canSpeak: boolean; onSpeak: () => void;
 }): ReactNode {
@@ -236,6 +260,7 @@ function ResultView(props: {
       {q.type === 'T6' && <div className="muted">{q.translation}</div>}
       {q.type === 'T4' && <div className="muted">{q.explain}</div>}
       {q.type === 'T10' && <div className="muted">手がかり：{q.cue}</div>}
+      {q.type === 'T3' && q.lemma.alt && (!ok || q.first) && <AltCard q={q} />}
       {!ok && (
         <div className="why">
           {why === null

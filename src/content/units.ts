@@ -5,6 +5,8 @@ export type Unit = { id: string; title: string; /** Tag patterns as written in t
 
 /** Dictionary-form tags that can never be drilled (the form equals the headword). */
 const UNDRILLABLE = new Set(['noun.nom.sg', 'adj.nom.m']);
+/** Tags added to a unit for practice but never required to master it. */
+export const GATE_EXEMPT = new Set(['verb.pres.alt', 'verb.reflexive']);
 
 function unit(id: string, title: string, patterns: string[]): Unit {
   const tags = [...new Set(patterns.flatMap(expandTagPattern))].filter((t) => !UNDRILLABLE.has(t));
@@ -16,7 +18,7 @@ export const UNITS: Unit[] = [
   unit('U1', '綴りの規則とアクセント', ['spell.*', 'phon.stress']),
   unit('U2', '名詞の性・複数主格', ['noun.gender', 'noun.nom.*']),
   unit('U3', '人称代名詞・これは', ['pron.personal']),
-  unit('U4', '動詞の現在形', ['verb.pres.*']),
+  unit('U4', '動詞の現在形', ['verb.pres.*', 'verb.pres.alt']),
   unit('U5', '前置格', ['noun.prep.sg', 'prep.в', 'prep.на', 'prep.о']),
   unit('U6', '対格', ['noun.acc.sg']),
   unit('U7', '形容詞・所有代名詞の主格での一致', ['adj.nom.*', 'pron.possessive']),
@@ -42,7 +44,7 @@ export function isContextOnlyTag(tag: string): boolean {
 export type TagProgress = { tag: string; n: number; lb: number; ok: boolean };
 
 export function unitProgress(u: Unit, stats: Map<string, TagStat>): TagProgress[] {
-  return u.tags.map((tag) => {
+  return u.tags.filter((tag) => !GATE_EXEMPT.has(tag)).map((tag) => {
     const s = stats.get(tag);
     const n = s?.n ?? 0;
     const lb = s ? wilsonLB(s.k, s.n) : 0;

@@ -27,7 +27,7 @@ export function prepTag(word: string): string | null {
 
 const FIXED_TAGS = [
   'spell.y_i', 'spell.o_e', 'spell.a_ya', 'phon.stress', 'noun.gender',
-  'verb.pres.conj1', 'verb.pres.conj2', 'verb.pres.irreg', 'verb.past', 'verb.imp', 'verb.aspect', 'verb.aspect.pair',
+  'verb.pres.conj1', 'verb.pres.conj2', 'verb.pres.irreg', 'verb.pres.alt', 'verb.past', 'verb.imp', 'verb.aspect', 'verb.aspect.pair',
   'verb.aspect.choice', 'verb.motion',
   'num.gov', 'pron.personal', 'pron.possessive', 'vocab',
 ];
@@ -137,12 +137,24 @@ export function tagsForFeat(lemma: Lemma, feat: FeatKey): string[] {
     tags.push('verb.imp');
   }
   if (lemma.pos === 'verb' && MOTION_VERBS.includes(bare) && (p[0] === 'pres' || p[0] === 'past')) tags.push('verb.motion');
+  // B1: the alternation tag goes on the persons where the stem actually alternates.
+  if (lemma.alt && p[0] === 'pres' && (lemma.alt.scope === 'all' || feat === 'pres.1sg')) tags.push('verb.pres.alt');
   const form = lemma.forms[feat];
   if (form) tags.push(...spellTagsFor(lemma, feat, form));
   return tags;
 }
 
 // ---------- Japanese labels ----------
+
+/** Infinitive stem (without the final vowel) and pres.1sg stem, accents removed. */
+export function verbStems(lemma: Lemma): { infFull: string; inf: string; pres1: string } | null {
+  const infFull = normalize(lemma.bare).replace(/(ся|сь)$/, '').replace(/(ть|ти|чь)$/, '');
+  const inf = /[аеиоуыэюя]$/.test(infFull) ? infFull.slice(0, -1) : infFull;
+  const p1 = lemma.forms['pres.1sg'];
+  if (!p1) return null;
+  const pres1 = normalize(p1.primary).replace(/(ся|сь)$/, '').replace(/[ую]$/, '');
+  return { infFull, inf, pres1 };
+}
 
 export const ASPECT_JA: Record<'impf' | 'pf' | 'both', string> = { impf: '不完', pf: '完', both: '両体' };
 
@@ -188,7 +200,7 @@ const FIXED_TAG_JA: Record<string, string> = {
   'spell.y_i': '綴り：и / ы の規則', 'spell.o_e': '綴り：о / е の規則', 'spell.a_ya': '綴り：а・у / я・ю の規則',
   'phon.stress': 'アクセント', 'noun.gender': '名詞の性',
   'verb.pres.conj1': '現在形・第1変化', 'verb.pres.conj2': '現在形・第2変化', 'verb.pres.irreg': '現在形・不規則',
-  'verb.past': '過去形', 'verb.imp': '命令形', 'verb.aspect': '体', 'verb.aspect.pair': '体のペア', 'verb.aspect.choice': '体の選択', 'verb.motion': '運動の動詞',
+  'verb.pres.alt': '子音交替', 'verb.past': '過去形', 'verb.imp': '命令形', 'verb.aspect': '体', 'verb.aspect.pair': '体のペア', 'verb.aspect.choice': '体の選択', 'verb.motion': '運動の動詞',
   'num.gov': '数詞と格', 'pron.personal': '人称代名詞', 'pron.possessive': '所有代名詞', vocab: '語彙',
 };
 
