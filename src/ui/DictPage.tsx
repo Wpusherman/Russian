@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { translit } from '../core/translit';
-import { glossOf } from '../core/grade';
+import { glossOf, isUncertainGloss } from '../core/grade';
 import { CASE_JA, GENDER_JA, NUM_JA, featLabelJa, verbConjType } from '../core/tags';
 import { ADJ_GENDERS, CASES, IMP_KEYS, NUMBERS, PAST_KEYS, PRES_KEYS, type Form, type Lemma } from '../core/types';
 import type { LemmaRow } from '../db/db';
@@ -68,7 +68,7 @@ export function LemmaCard({ lemma }: { lemma: LemmaRow }): ReactNode {
   return (
     <div className="card">
       <h3 className="ru">{lemma.accented}{lemma.hint && <span className="muted"> {lemma.hint}</span>}</h3>
-      <div>{glossOf(lemma) || <span className="muted">（訳語なし）</span>}</div>
+      <div className={isUncertainGloss(glossOf(lemma)) ? 'uncertain-gloss' : ''}>{glossOf(lemma) || <span className="muted">（訳語なし）</span>}</div>
       {lemma.glossJa && lemma.glossEn.length > 0 && <div className="muted">{lemma.glossEn.slice(0, 4).join(', ')}</div>}
       <div className="muted small-text">{meta.join(' ・ ')}</div>
       <FormsTable lemma={lemma} />

@@ -5,14 +5,14 @@ import type { AnalyzeOutput } from '../src/ai/schemas';
 import { backlogMarkdown, importAnalysis, restoreLineBreaks, runExplain, runGloss, runNote } from '../src/ai/tasks';
 import { UNITS } from '../src/content/units';
 import { ratingFor } from '../src/core/classify';
-import { grade, type Answer, type Question } from '../src/core/grade';
+import { grade, isUncertainGloss, type Answer, type Question } from '../src/core/grade';
 import { DAY_MS } from '../src/core/stats';
 import type { Form, Lemma } from '../src/core/types';
 import { exportAll, importAll, parseBackup } from '../src/db/backup';
 import { db, RusloDB, setDb } from '../src/db/db';
 import { toRow } from '../src/db/dict';
 import { loadSettings, setSetting } from '../src/db/settings';
-import { activeWeights, buildQuestion, buildSession, loadContext, newLemmaQueue, recordAttempt } from '../src/db/study';
+import { activeWeights, buildQuestion, buildSession, glossCandidates, loadContext, newLemmaQueue, recordAttempt } from '../src/db/study';
 import { createWordlist } from '../src/db/wordlists';
 
 const f = (primary: string): Form => ({ primary, variants: [] });
@@ -316,5 +316,55 @@ describe('T4 / T6 flow and export / import (M6)', () => {
     expect(await db.lemmas.count()).toBe(102);
     expect(() => parseBackup('{"app":"other"}')).toThrow();
     expect(() => parseBackup('nope')).toThrow();
+  });
+});
+
+
+describe('AI gloss (G1)', () => {
+  const noGloss = (): Lemma => ({
+    id: 'n-стекло', bare: 'стекло', accented: 'стекло́', pos: 'noun', rank: 900, level: 'A1', gender: 'n',
+    glossEn: [], forms: { 'case.nom.sg': f('стекло́'), 'case.gen.pl': f('стёкол') },
+  });
+
+  it('offers user words / phrases first, includes words without an English gloss, and skips glossed words', async () => {
+    await createWordlist('glossed', 'лампа	ランプ');
+    await createWordlist('user', 'привет2');
+    await db.lemmas.put(toRow(noGloss()));
+
+    const ids = (await glossCandidates([], 200)).map((l) => l.id);
+    expect(ids[0]).toBe('u-привет2'); // user word first
+    expect(ids).toContain('n-стекло'); // no English gloss, still offered
+    expect(ids).not.toContain('n-лампа'); // already has glossJa
+    expect(ids).not.toContain('u-привет'); // only the registered user word
+
+    const plain = await newLemmaQueue([], 200);
+    expect(plain).not.toContain('n-стекло'); // cannot be scheduled before it has a gloss
+    expect(await newLemmaQueue([], 200, { includeUnglossed: true })).toContain('n-стекло');
+  });
+
+  it('sends pos / aspect / partner, omits a missing en, and keeps an uncertain "?" gloss', async () => {
+    await db.lemmas.bulkPut([
+      toRow({ id: 'v-делать', bare: 'делать', accented: 'де́лать', pos: 'verb', rank: 20, level: 'A1', aspect: 'impf', partnerIds: ['v-сделать'], glossEn: ['do'], forms: { 'pres.1sg': f('де́лаю') } }),
+      toRow({ id: 'v-сделать', bare: 'сделать', accented: 'сде́лать', pos: 'verb', rank: 21, level: 'A1', aspect: 'pf', partnerIds: ['v-делать'], glossEn: ['make'], forms: { 'past.m': f('сде́лал') } }),
+      toRow(noGloss()),
+    ]);
+    let seen: { id: string; ru: string; pos: string; en?: string; aspect?: string; partner?: string }[] = [];
+    const provider: AIProvider = {
+      run: async <T>(_task: string, input: unknown) => {
+        seen = input as typeof seen;
+        return { items: seen.map((x) => ({ id: x.id, ja: x.id === 'n-книга' ? '本?' : '訳' })) } as T;
+      },
+    };
+    expect(await runGloss(provider, { cards: [] })).toBeGreaterThan(0);
+
+    const delat = seen.find((x) => x.id === 'v-делать')!;
+    expect(delat).toMatchObject({ ru: 'делать', pos: 'verb', aspect: 'impf', partner: 'сделать' });
+    expect(delat.en).toBe('do');
+    expect('en' in seen.find((x) => x.id === 'n-стекло')!).toBe(false);
+    expect(seen.find((x) => x.id === 'n-книга')!.pos).toBe('noun');
+
+    expect((await db.lemmas.get('n-книга'))?.glossJa).toBe('本?');
+    expect(isUncertainGloss((await db.lemmas.get('n-книга'))!.glossJa!)).toBe(true);
+    expect((await loadSettings()).glossJa['n-книга']).toBe('本?');
   });
 });

@@ -35,6 +35,11 @@ export function glossOf(lemma: Pick<Lemma, 'glossJa' | 'glossEn'>): string {
   return lemma.glossEn.slice(0, 2).join(', ');
 }
 
+/** An AI gloss marked as uncertain by a trailing "?" (shown in a lighter colour). */
+export function isUncertainGloss(gloss: string): boolean {
+  return /[?？]$/.test(gloss.trim());
+}
+
 /** Word without stress marks plus the indexes of its stressed characters (ё counts as stressed). */
 export function stressInfo(accented: string): { word: string; stressed: number[] } {
   let word = '';

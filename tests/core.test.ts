@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { classify, damerauLevenshtein, ratingFor } from '../src/core/classify';
+import { isUncertainGloss } from '../src/core/grade';
 import { normalize } from '../src/core/normalize';
 import { confusionCounts, DAY_MS, tagStats, wilsonLB } from '../src/core/stats';
 import { expandTagPattern, tagsForFeat, verbConjType, confusionLabelJa } from '../src/core/tags';
@@ -232,6 +233,15 @@ describe('tags', () => {
   });
   it('labels confusions in Japanese', () => {
     expect(confusionLabelJa('case.prep.sg', 'case.acc.sg')).toBe('対格と前置格を取り違え');
+  });
+});
+
+describe('uncertain gloss', () => {
+  it('detects a trailing "?" written by the AI', () => {
+    expect(isUncertainGloss('本?')).toBe(true);
+    expect(isUncertainGloss('本？ ')).toBe(true);
+    expect(isUncertainGloss('本')).toBe(false);
+    expect(isUncertainGloss('?本')).toBe(false);
   });
 });
 

@@ -49,6 +49,7 @@ code, kbd { font-family: Consolas, monospace; font-size: 0.85em; background: var
 kbd { border: 1px solid var(--border); }
 .ru { font-family: "Segoe UI", "Noto Sans", Arial, sans-serif; }
 .muted { color: var(--muted); }
+.uncertain-gloss { color: var(--muted); font-style: italic; }
 .small-text { font-size: 0.85rem; }
 .ok-text { color: var(--ok); }
 

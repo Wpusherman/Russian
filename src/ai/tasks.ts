@@ -98,7 +98,20 @@ export function backlogMarkdown(rows: BacklogRow[]): string {
 export async function runGloss(provider: AIProvider, ctx: Pick<StudyContext, 'cards'>): Promise<number> {
   const words = (await glossCandidates(ctx.cards)).slice(0, 100);
   if (words.length === 0) return 0;
-  const input = words.map((w) => ({ id: w.id, ru: w.bare, en: w.glossEn.slice(0, 3).join(', ') }));
+  const partnerIds = [...new Set(words.flatMap((w) => w.partnerIds ?? []))];
+  const partnerRows = await db.lemmas.bulkGet(partnerIds);
+  const partnerBare = new Map(partnerRows.filter((r): r is LemmaRow => !!r).map((r) => [r.id, r.bare]));
+  const input = words.map((w) => {
+    const item: { id: string; ru: string; pos: string; en?: string; aspect?: string; partner?: string } = {
+      id: w.id, ru: w.bare, pos: w.pos,
+    };
+    const en = w.glossEn.slice(0, 3).join(', ');
+    if (en) item.en = en;
+    if (w.aspect) item.aspect = w.aspect;
+    const partner = w.partnerIds?.[0];
+    if (partner && partnerBare.has(partner)) item.partner = partnerBare.get(partner);
+    return item;
+  });
   const out = await provider.run<GlossOutput>('gloss', input, glossJsonSchema);
   const valid = new Set(words.map((w) => w.id));
   const glosses: Record<string, string> = {};

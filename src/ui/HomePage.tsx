@@ -87,17 +87,18 @@ export function HomePage(): ReactNode {
         </button>
       </section>
 
-      {(glossCount > 0 || glossDone !== null) && (
-        <section className="card banner">
-          <div>
-            <h2>日本語訳の生成（AI）</h2>
-            <p className="muted">これから出題される語のうち、日本語訳がない語：{glossCount}語（無い場合は英語の訳語を表示します）</p>
-            {glossDone !== null && <p className="ok-text">{glossDone}語の日本語訳を保存しました。</p>}
-            <AiErrorBox task={gloss} />
-          </div>
-          <button disabled={gloss.busy || glossCount === 0} onClick={doGloss}>{gloss.busy ? '生成中…' : '日本語訳を生成'}</button>
-        </section>
-      )}
+      <section className="card banner">
+        <div>
+          <h2>日本語訳の生成（AI）</h2>
+          <p className="muted">
+            日本語訳がない語：{glossCount}{glossCount >= 100 ? '語以上' : '語'}
+            （ユーザー語・フレーズ → 新規枠の順。英語の訳語がない語も生成し、自信がない訳には「?」を付けます）
+          </p>
+          {glossDone !== null && <p className="ok-text">{glossDone}語の日本語訳を保存しました。</p>}
+          <AiErrorBox task={gloss} />
+        </div>
+        <button disabled={gloss.busy || glossCount === 0} onClick={doGloss}>{gloss.busy ? '生成中…' : '日本語訳を生成'}</button>
+      </section>
     </div>
   );
 }

@@ -61,8 +61,12 @@ export async function loadContext(now = Date.now()): Promise<StudyContext> {
 
 const LEVEL_ORDER = ['A1', 'A2', 'B1'];
 
-/** Unlearned lemma ids in priority order: active word lists first, then A1 -> A2 -> B1 by rank. */
-export async function newLemmaQueue(cards: CardRow[], limit = 200): Promise<string[]> {
+/**
+ * Unlearned lemma ids in priority order: active word lists first, then A1 -> A2 -> B1 by rank.
+ * With `includeUnglossed`, words that cannot be asked yet (no Japanese / English gloss) are kept
+ * as well, so the AI gloss task can fill them in.
+ */
+export async function newLemmaQueue(cards: CardRow[], limit = 200, opts: { includeUnglossed?: boolean } = {}): Promise<string[]> {
   const learned = new Set(cards.filter((c) => c.type === 'T1').map((c) => c.lemmaId));
   const out: string[] = [];
   const seen = new Set<string>();
@@ -72,26 +76,44 @@ export async function newLemmaQueue(cards: CardRow[], limit = 200): Promise<stri
       out.push(id);
     }
   };
+  // Words without any gloss cannot be asked as T1 (nothing to choose from), so they are skipped
+  // unless the caller explicitly wants them (AI gloss generation).
+  const usable = (r: LemmaRow) => opts.includeUnglossed || !!r.glossJa || r.glossEn.length > 0;
   const lists = (await db.wordlists.toArray()).filter((l) => l.active).sort((a, b) => a.priority - b.priority);
   const listIds = lists.flatMap((l) => l.entries.map((e) => e.lemmaId));
   const listRows = await db.lemmas.bulkGet(listIds);
-  // Words without any gloss cannot be asked as T1 (nothing to choose from), so they are skipped.
-  listRows.forEach((r) => { if (r && (r.glossJa || r.glossEn.length > 0)) push(r.id); });
+  listRows.forEach((r) => { if (r && usable(r)) push(r.id); });
   if (out.length >= limit) return out.slice(0, limit);
   for (const level of LEVEL_ORDER) {
     const rows = await db.lemmas.where('level').equals(level).toArray();
     rows.sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9) || a.id.localeCompare(b.id));
-    for (const r of rows) if (!r.user && (r.glossEn.length > 0 || r.glossJa)) push(r.id);
+    for (const r of rows) if (!r.user && usable(r)) push(r.id);
     if (out.length >= limit) break;
   }
   return out.slice(0, limit);
 }
 
-/** Up to 100 upcoming new words that still lack a Japanese gloss (spec 12.3). */
-export async function glossCandidates(cards: CardRow[]): Promise<LemmaRow[]> {
-  const ids = await newLemmaQueue(cards, 100);
+/**
+ * Up to `limit` words that lack a Japanese gloss (spec 12.3): user words / phrases from the active
+ * word lists first, then the upcoming new words. English glosses are optional.
+ */
+export async function glossCandidates(cards: CardRow[], limit = 100): Promise<LemmaRow[]> {
+  const out: LemmaRow[] = [];
+  const seen = new Set<string>();
+  const push = (r: LemmaRow | undefined) => {
+    if (!r || r.glossJa || seen.has(r.id) || out.length >= limit) return;
+    seen.add(r.id);
+    out.push(r);
+  };
+  const lists = (await db.wordlists.toArray()).filter((l) => l.active).sort((a, b) => a.priority - b.priority);
+  const userIds = [...new Set(lists.flatMap((l) => l.entries.map((e) => e.lemmaId)))];
+  const userRows = await db.lemmas.bulkGet(userIds);
+  userRows.filter((r): r is LemmaRow => !!r && !!r.user).forEach(push);
+  if (out.length >= limit) return out;
+  const ids = await newLemmaQueue(cards, limit, { includeUnglossed: true });
   const rows = await db.lemmas.bulkGet(ids);
-  return rows.filter((r): r is LemmaRow => !!r && !r.glossJa && r.glossEn.length > 0);
+  rows.forEach(push);
+  return out;
 }
 
 const NUMERALS = new Set([

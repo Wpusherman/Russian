@@ -6,8 +6,9 @@ export const SYSTEM_PROMPTS: Record<AITask, string> = {
 tag_weightsは弱点ほど大きく(0.5-3)。new_itemsは弱点タグを狙う穴埋め文で、語彙はA1-A2、文は8語以内、
 sentence_ruに空欄"___"を1つだけ含め、lemmaは辞書形(アクセント記号なし)、featは次の形式: case.<nom|gen|dat|acc|ins|prep>.<sg|pl> / pres.<1sg..3pl> / past.<m|f|n|pl> / adj.<case>.<m|f|n|pl>。
 feature_requestsは、統計から見て学習アプリ側に追加すべき機能があれば最大3件、実装可能な具体的仕様で書く。全て日本語(ロシア語部分を除く)。`,
-  gloss: `あなたは露和辞典の編集者。入力は [{id, ru, en}] の配列（ru はロシア語の見出し語、en は英語の訳語）。
+  gloss: `あなたは露和辞典の編集者。入力は [{id, ru, en?, pos, aspect?, partner?}] の配列（ru はロシア語の見出し語、en は英語の訳語でないこともある、pos は品詞、aspect は動詞の体、partner は対になる動詞）。
 各語について日本語訳 ja を作る。ja は15字以内で、主な意味を最大2つ、「、」区切り。説明や品詞名は書かない。
+en がない語は ru だけから訳す。訳に自信がない場合は ja の末尾に「?」を付ける。
 出力は {"items":[{"id","ja"}]} で、入力の id をそのまま使い、全ての語を含める。`,
   note: `あなたは日本語話者の初級者にロシア語を教える教師。入力は文法単元 {unit, title, tags}。
 その単元の文法ノートを日本語で書く。出力は {"title", "body_md"}。

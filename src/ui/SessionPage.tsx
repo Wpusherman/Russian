@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cachedExplain, runExplain } from '../ai/tasks';
 import { CLASS_JA, isCorrectClass, ratingFor } from '../core/classify';
-import { grade, hintText, targetLabel, type Answer, type Graded, type Question } from '../core/grade';
+import { grade, hintText, isUncertainGloss, targetLabel, type Answer, type Graded, type Question } from '../core/grade';
 import { isVowel } from '../core/normalize';
 import { confusionLabelJa } from '../core/tags';
 import type { AnswerClass, RatingNum } from '../core/types';
@@ -40,12 +40,12 @@ function Prompt({ q, onSpeak, canSpeak }: { q: Question; onSpeak: () => void; ca
     case 'T1':
       return <div className="prompt"><div className="ru big-word">{q.lemma.accented}{q.hint && <span className="muted"> {q.hint}</span>}</div>{speakBtn}<p className="muted">意味を選んでください（1〜4）</p></div>;
     case 'T2':
-      return <div className="prompt"><div className="big-word">{q.gloss}</div>{q.hint && <div className="muted">{q.hint}</div>}{canSpeak && <button className="ghost small" tabIndex={-1} onClick={onSpeak}>🔊 <kbd>Ctrl+P</kbd></button>}<p className="muted">ロシア語で書いてください</p></div>;
+      return <div className="prompt"><div className={isUncertainGloss(q.gloss) ? 'big-word uncertain-gloss' : 'big-word'}>{q.gloss}</div>{q.hint && <div className="muted">{q.hint}</div>}{canSpeak && <button className="ghost small" tabIndex={-1} onClick={onSpeak}>🔊 <kbd>Ctrl+P</kbd></button>}<p className="muted">ロシア語で書いてください</p></div>;
     case 'T3':
       return (
         <div className="prompt">
           <div className="ru big-word">{q.lemma.accented}</div>
-          <div className="muted">{q.gloss}</div>
+          <div className={isUncertainGloss(q.gloss) ? 'muted uncertain-gloss' : 'muted'}>{q.gloss}</div>
           <div className="target">→ {targetLabel(q)}</div>
         </div>
       );
@@ -108,7 +108,7 @@ function QuestionView(props: {
         {q.options.map((o, i) => {
           const cls = !answered ? '' : i === q.correct ? 'right' : o === result.graded.given ? 'wrong' : '';
           return (
-            <button key={i} className={`option ${cls}`} disabled={answered} onClick={() => onAnswer({ kind: 'choice', index: i }, 0)}>
+            <button key={i} className={`option ${cls}${isUncertainGloss(o) ? ' uncertain-gloss' : ''}`} disabled={answered} onClick={() => onAnswer({ kind: 'choice', index: i }, 0)}>
               <kbd>{i + 1}</kbd> {o}
             </button>
           );
@@ -192,7 +192,7 @@ function ResultView(props: {
         {g.confusion && <span className="confusion">{confusionLabelJa(g.confusion.expected, g.confusion.given)}</span>}
       </div>
       <div className="answer">
-        正解：<span className="ru big">{g.expected}</span>
+        正解：<span className={`ru big${q.type === 'T1' && isUncertainGloss(g.expected) ? ' uncertain-gloss' : ''}`}>{g.expected}</span>
         {'hint' in q && q.hint && <span className="muted">（{q.hint}）</span>}
         {props.canSpeak && <button className="ghost small" tabIndex={-1} onClick={props.onSpeak}>🔊 <kbd>P</kbd></button>}
       </div>
