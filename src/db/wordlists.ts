@@ -53,10 +53,26 @@ export async function saveHints(hints: Record<string, string>): Promise<number> 
   return updates.length;
 }
 
+export type Ambiguity = { word: string; candidates: LemmaRow[] };
+
+/** Headwords that match more than one dictionary entry (same spelling, different lemmas). */
+export async function findAmbiguities(text: string): Promise<Ambiguity[]> {
+  const out: Ambiguity[] = [];
+  const seen = new Set<string>();
+  for (const line of parseWordlistText(text)) {
+    const word = normalizeHeadword(line.word);
+    if (seen.has(word)) continue;
+    seen.add(word);
+    const hits = (await findLemmas(word)).filter((h) => !h.user);
+    if (hits.length > 1) out.push({ word, candidates: hits });
+  }
+  return out;
+}
+
 export type ImportSummary = { matched: number; created: number; total: number; /** Registered words with neither a Japanese nor an English gloss (never asked). */ unglossed: string[] };
 
 /** Create a word list from pasted text (spec section 11). */
-export async function createWordlist(name: string, text: string): Promise<ImportSummary> {
+export async function createWordlist(name: string, text: string, choices: Readonly<Record<string, string>> = {}): Promise<ImportSummary> {
   const lines = parseWordlistText(text);
   const entries: WordlistEntry[] = [];
   const glosses: Record<string, string> = {};
@@ -66,7 +82,7 @@ export async function createWordlist(name: string, text: string): Promise<Import
   for (const line of lines) {
     const word = normalizeHeadword(line.word);
     const hits = await findLemmas(word);
-    let lemma = hits[0]; // lowest rank
+    let lemma = (choices[word] ? hits.find((h) => h.id === choices[word]) : undefined) ?? hits[0]; // chosen, else lowest rank
     if (lemma && !lemma.user) matched++;
     if (!lemma) {
       // Words missing from the dictionary (incl. whole phrases / idioms) become user lemmas: T1/T2 only.

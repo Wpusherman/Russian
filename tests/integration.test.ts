@@ -13,7 +13,7 @@ import { SCHEMA_VERSION, db, RusloDB, setDb } from '../src/db/db';
 import { toRow } from '../src/db/dict';
 import { loadSettings, setSetting } from '../src/db/settings';
 import { activeWeights, buildQuestion, buildSession, glossCandidates, loadContext, newLemmaQueue, recordAttempt } from '../src/db/study';
-import { createWordlist } from '../src/db/wordlists';
+import { createWordlist, findAmbiguities } from '../src/db/wordlists';
 import { markAllBacklogExported, syncAppVersion } from '../src/db/backlog';
 
 const f = (primary: string): Form => ({ primary, variants: [] });
@@ -182,6 +182,16 @@ describe('word lists (M4)', () => {
     const accented = await db.lemmas.get('u-сказать');
     expect(accented?.bare).toBe('сказать');
     expect(accented?.accented).toBe('сказа\u0301ть');
+  });
+  it('lists homonyms and stores the explicitly chosen lemma (W3)', async () => {
+    await db.lemmas.put(toRow({ ...noun('ламп', 999), id: 'n-лампа~2', bare: 'лампа', accented: 'ла́мпа', glossEn: ['lamp (second)'] }));
+    const amb = await findAmbiguities('лампа');
+    expect(amb).toHaveLength(1);
+    expect(amb[0]!.word).toBe('лампа');
+    expect(amb[0]!.candidates.map((c) => c.id).sort()).toEqual(['n-лампа', 'n-лампа~2']);
+    await createWordlist('homonym', 'лампа	ランプ2', { 'лампа': 'n-лампа~2' });
+    const list = (await db.wordlists.toArray())[0]!;
+    expect(list.entries[0]!.lemmaId).toBe('n-лампа~2');
   });
   it('reports words that have no translation and therefore are never asked (W5)', async () => {
     const r = await createWordlist('mixed', 'привет\nкнига\t本\nпока');

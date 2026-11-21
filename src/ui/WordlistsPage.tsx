@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { db } from '../db/db';
-import { createWordlist, listWordlists, moveWordlist, type ImportSummary } from '../db/wordlists';
+import { createWordlist, findAmbiguities, listWordlists, moveWordlist, type Ambiguity, type ImportSummary } from '../db/wordlists';
+import { glossOf } from '../core/grade';
 import { useAsync } from './common';
 
 export function WordlistsPage(): ReactNode {
@@ -19,17 +20,30 @@ export function WordlistsPage(): ReactNode {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [ambiguities, setAmbiguities] = useState<Ambiguity[] | null>(null);
+  const [choices, setChoices] = useState<Record<string, string>>({});
 
-  const add = async () => {
+  const create = async (picked: Readonly<Record<string, string>>) => {
     setBusy(true);
     try {
-      setSummary(await createWordlist(name, text));
+      setSummary(await createWordlist(name, text, picked));
       setName('');
       setText('');
+      setAmbiguities(null);
+      setChoices({});
       reload();
     } finally {
       setBusy(false);
     }
+  };
+  const add = async () => {
+    const amb = await findAmbiguities(text);
+    if (amb.length > 0) {
+      setAmbiguities(amb);
+      setChoices(Object.fromEntries(amb.map((a) => [a.word, a.candidates[0]!.id])));
+      return;
+    }
+    await create({});
   };
   const toggle = async (id: number, active: boolean) => {
     await db.wordlists.update(id, { active });
@@ -82,8 +96,27 @@ export function WordlistsPage(): ReactNode {
           <textarea rows={10} value={text} onChange={(e) => setText(e.target.value)}
           placeholder={'книга\tほん\nчитать,読む\nсесть на +対\t乗る\nспасибо'} />
         </label>
+        {ambiguities && (
+          <div className="box">
+            <p>同じ表記の語が辞書に複数あります。登録する語を選んでください。</p>
+            {ambiguities.map((a) => (
+              <label key={a.word}>
+                <span className="ru">{a.word}</span>
+                <select value={choices[a.word]} onChange={(e) => setChoices({ ...choices, [a.word]: e.target.value })}>
+                  {a.candidates.map((c) => (
+                    <option key={c.id} value={c.id}>{c.bare}（{glossOf(c) || '訳なし'}）[{c.id}]</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+            <div className="row">
+              <button className="primary" disabled={busy} onClick={() => void create(choices)}>選択した語で登録</button>
+              <button className="ghost" onClick={() => setAmbiguities(null)}>キャンセル</button>
+            </div>
+          </div>
+        )}
         <div className="row">
-          <button className="primary" disabled={busy || !text.trim()} onClick={() => void add()}>{busy ? '登録中…' : '登録'}</button>
+          <button className="primary" disabled={busy || !text.trim() || !!ambiguities} onClick={() => void add()}>{busy ? '登録中…' : '登録'}</button>
           {summary && (
             <span className="ok-text">
               {summary.total}語を登録しました（辞書と一致 {summary.matched}語、辞書にない語 {summary.created}語）。
